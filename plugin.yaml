@@ -1,0 +1,8 @@
+name: pure-language
+version: "0.1.0"
+description: Keep every answer in one language - picks the target from the user's command or message (54 languages) and fixes words and characters leaking in from other languages
+author: joowon-jang
+requires_hermes: ">=0.23.4"
+provides_hooks:
+  - pre_llm_call
+  - transform_llm_output

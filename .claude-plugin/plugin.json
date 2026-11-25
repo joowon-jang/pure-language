@@ -1,0 +1,20 @@
+{
+  "name": "pure-language",
+  "version": "0.1.0",
+  "description": "Keep every answer in one language: picks the language from your command or message (54 languages) and catches words and characters leaking in from other languages.",
+  "author": {
+    "name": "joowon-jang",
+    "url": "https://github.com/joowon-jang"
+  },
+  "homepage": "https://github.com/joowon-jang/pure-language",
+  "license": "MIT",
+  "keywords": [
+    "language",
+    "multilingual",
+    "korean",
+    "translation",
+    "hooks",
+    "output"
+  ],
+  "displayName": "Pure Language"
+}

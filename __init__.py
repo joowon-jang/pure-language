@@ -1,0 +1,121 @@
+"""pure-language for Hermes Agent: keep every answer in one language.
+
+The target language comes from an explicit command in the user's message, else the
+language the user wrote in, else ``default_language``. ``pre_llm_call`` injects a
+short guard in that language; ``transform_llm_output`` cleans the final answer
+before it is stored and delivered. Lines the local rules cannot fix are rewritten
+in one bounded call through ``ctx.llm`` on the plugin's own auxiliary slot
+``pure_language_rewrite`` (defaults to the user's main model).
+
+Settings: ``$HERMES_HOME/pure-language.json`` (see README). Optional log:
+``$HERMES_HOME/logs/pure-language.log`` (off by default; snippets only).
+"""
+
+import logging
+import os
+import re
+import time
+
+from .engine import core as E
+from .engine import settings as S
+
+log = logging.getLogger(__name__)
+_TASK = "pure_language_rewrite"
+
+
+def _hermes_home():
+    home = os.environ.get("HERMES_HOME")
+    if home:
+        return home
+    if os.name == "nt" and os.environ.get("LOCALAPPDATA"):
+        return os.path.join(os.environ["LOCALAPPDATA"], "hermes")
+    return os.path.join(os.path.expanduser("~"), ".hermes")
+
+
+_CFG = S.load([os.path.join(_hermes_home(), "pure-language.json")])
+_CTX = None
+_TASK_OK = False
+_MEMO = {}       # sticky / last language per session
+_STATE = {}      # per-turn state recorded by pre_llm_call
+
+
+def _log_path():
+    return os.path.join(_hermes_home(), "logs", "pure-language.log") if _CFG["log"] else None
+
+
+def _rewriter(lines, target, allowed, sample):
+    if _CTX is None or not getattr(_CTX, "llm", None):
+        return None
+    kwargs = {"task": _TASK} if _TASK_OK else {}
+    result = _CTX.llm.complete_structured(
+        instructions=E.rewrite_instructions(target, allowed, sample),
+        input=[{"type": "text", "text": E.number_lines(lines)}],
+        json_schema=E.REWRITE_SCHEMA,
+        schema_name="pure_language.lines",
+        purpose="pure-language.rewrite",
+        temperature=0.0,
+        max_tokens=200 + 120 * len(lines),
+        timeout=_CFG["timeout"],
+        **kwargs,
+    )
+    return E.parse_rewrite(getattr(result, "parsed", None), len(lines))
+
+
+def _on_pre_llm(session_id="", user_message="", turn_id=None, **kwargs):
+    key = session_id or "default"
+    msg = user_message or ""
+    target, allowed, skip = E.resolve_turn(_MEMO, key, msg, default=_CFG["default_language"])
+    st = {"skip": skip, "target": target, "allowed": allowed, "text": msg, "at": time.time(),
+          "user": {w.lower() for w in re.findall(r"[A-Za-z]{2,}", msg)},
+          "user_cjk": set(E._CJK_RE.findall(msg)) | set(E._HANGUL_RUN.findall(msg))}
+    _STATE[("turn", turn_id) if turn_id else ("session", key)] = st
+    if len(_STATE) > 200:
+        for k in list(_STATE)[:-100]:
+            _STATE.pop(k, None)
+    return None if skip else E.guard_for(target, allowed)
+
+
+def _take_state(session_id, turn_id):
+    """Only the turn that ran pre_llm_call is cleaned. Background agents sharing the
+    session (memory/skill review forks, compression) fire no pre_llm_call for their
+    own turn, so their output is left alone."""
+    if turn_id:
+        return _STATE.pop(("turn", turn_id), None)
+    st = _STATE.pop(("session", session_id or "default"), None)
+    return st if st is not None and time.time() - st["at"] < 1800 else None
+
+
+def _on_transform(response_text="", session_id="", turn_id=None, **kwargs):
+    st = _take_state(session_id, turn_id)
+    if st is None or st["skip"] or not response_text:
+        return None
+    try:
+        text, hits = E.clean(response_text, st["user"], st["user_cjk"], target=st["target"],
+                             allowed=st["allowed"] or frozenset({st["target"]}), user_text=st["text"],
+                             rewriter=_rewriter if _CFG["rewrite"] else None,
+                             max_lines=_CFG["max_lines"])
+    except Exception:  # never lose the answer because of the cleaner
+        log.warning("pure-language: cleaner failed", exc_info=True)
+        return None
+    if text == response_text:
+        return None
+    E.write_log(_log_path(), session_id, [("[%s] %s" % (st["target"], h[0]),) + tuple(h[1:]) for h in hits])
+    log.info("pure-language: %d fix(es) in final answer (target=%s)", len(hits), st["target"])
+    return text
+
+
+def register(ctx):
+    global _CTX, _TASK_OK
+    _CTX = ctx
+    try:
+        ctx.register_auxiliary_task(
+            _TASK, display_name="Language rewrite",
+            description="pure-language: rewrite only the lines that mix in another language")
+        _TASK_OK = True
+    except Exception as exc:  # older hosts without auxiliary tasks
+        log.info("pure-language: auxiliary task not registered: %s", exc)
+    ctx.register_hook("pre_llm_call", _on_pre_llm)
+    if _CFG["hold_stream"]:
+        ctx.register_hook("transform_llm_output", _on_transform, hold_stream=True)
+    else:
+        ctx.register_hook("transform_llm_output", _on_transform)

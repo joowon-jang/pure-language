@@ -1,0 +1,23 @@
+{
+  "name": "pure-language",
+  "owner": {
+    "name": "joowon-jang",
+    "url": "https://github.com/joowon-jang"
+  },
+  "description": "Keep every answer in one language: picks the language from your command or message (54 languages) and catches words and characters leaking in from other languages.",
+  "plugins": [
+    {
+      "name": "pure-language",
+      "source": "./",
+      "description": "Keep every answer in one language: picks the language from your command or message (54 languages) and catches words and characters leaking in from other languages.",
+      "keywords": [
+        "language",
+        "multilingual",
+        "korean",
+        "translation",
+        "hooks",
+        "output"
+      ]
+    }
+  ]
+}

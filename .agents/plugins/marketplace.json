@@ -1,0 +1,20 @@
+{
+  "name": "pure-language",
+  "interface": {
+    "displayName": "Pure Language"
+  },
+  "plugins": [
+    {
+      "name": "pure-language",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
