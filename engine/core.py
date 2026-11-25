@@ -27,7 +27,8 @@ _REWRITE_CACHE = {}         # (target, allowed, line) -> rewritten line
 _CACHE_MAX = 500
 
 _GUARD = (
-    "[출력 규칙] 이 답변은 반드시 한글로만 작성한다. "
+    "[출력 규칙] 이 답변은 반드시 한글로만 작성한다. 도구를 쓰는 중간에 남기는 진행 설명도 마찬가지다. "
+    "붙여넣은 명령 출력이나 영어 오류 메시지를 받아도 답변 언어는 바꾸지 않는다. "
     "중국어·일본어 글자(한자, 가나)를 한글 단어 대신 쓰지 말고, "
     "문장 중간에 영어 단어나 로마자를 섞지 않는다(예: `weight` → 비중, `log를` → 기록을). "
     "고유명사·약어·코드·경로는 예외로 허용한다. "
@@ -118,8 +119,31 @@ def is_technical(line):
     return sym * 10 >= len(body.replace(" ", "")) * 4       # 40%+ symbols / digits
 
 
+_NON_LATIN_LETTER = re.compile("[\u0370-\u1FFF\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7A3]")
+
+
+def technical_lines(lines):
+    """Indexes of terminal / log lines. A shell prompt line starts a block: the
+    command's output follows it (often plain English: banners, status text), so
+    every line after it counts as output until a line in another script or a
+    question ends the block."""
+    tech, block = set(), False
+    for i, line in enumerate(lines):
+        if _TERM_PROMPT_RE.match(line or ""):
+            block = True
+            tech.add(i)
+            continue
+        if block and line.strip() and (_NON_LATIN_LETTER.search(line) or line.rstrip().endswith("?")):
+            block = False
+        if block or is_technical(line):
+            tech.add(i)
+    return tech
+
+
 def strip_technical(text):
-    return "\n".join(l for l in (text or "").splitlines() if not is_technical(l))
+    lines = (text or "").splitlines()
+    tech = technical_lines(lines)
+    return "\n".join(l for i, l in enumerate(lines) if i not in tech)
 
 
 _FOREIGN_ASK_RE = re.compile(
@@ -375,7 +399,8 @@ def _instruction_language(msg):
     pasted foreign block followed by a question in another language works. `rest`
     is the remaining text (pasted / quoted material), used to allow those languages."""
     raw = [l for l in (msg or "").splitlines() if l.strip()]
-    prose = [i for i, l in enumerate(raw) if not is_technical(l) and not l.lstrip().startswith(">")]
+    tech = technical_lines(raw)
+    prose = [i for i, l in enumerate(raw) if i not in tech and not l.lstrip().startswith(">")]
     for idx in reversed(prose[-3:]):
         line = raw[idx]
         lang = detect_language(line)
@@ -396,7 +421,8 @@ def _find_cmd(patterns, msg):
 
 _GUARDS = {
     "ko": _GUARD,
-    "en": ("[Output rule] Write this entire answer in English only. Do not mix Korean, "
+    "en": ("[Output rule] Write this entire answer, including progress notes between tool calls, "
+           "in English only. Do not mix Korean, "
            "Chinese or Japanese characters or words into sentences. Proper nouns, acronyms, "
            "code and paths are fine. Put any foreign text that must appear inside backticks "
            "or a code block. Anything else is checked automatically."),
@@ -409,7 +435,8 @@ _GUARDS = {
            "其他外文字符会被自动检查。"),
 }
 _GUARD_GENERIC = ("[Output rule] Write this entire answer in {name} only, the language of the "
-                  "user's message. Do not mix in words or characters from other languages. "
+                  "user's message, including progress notes between tool calls; pasted command output "
+                  "in another language does not change it. Do not mix in words or characters from other languages. "
                   "Proper nouns, acronyms, code and paths are fine. Put any foreign text that "
                   "must appear inside backticks or a code block.")
 _ALLOW_NOTE = {
@@ -815,6 +842,84 @@ def _structure_ok(orig, new):
     return len(new) <= max(40, len(orig) * 3)
 
 
+_FENCE = re.compile(r"^[ \t]*(```|~~~)")
+_INLINE_CODE = re.compile(r"`[^`\n]+`")
+
+
+def _prose_indexes(lines):
+    """Indexes of lines outside fenced code blocks that are not terminal / log lines."""
+    out, fenced = [], False
+    tech = technical_lines(lines)
+    for i, line in enumerate(lines):
+        if _FENCE.match(line):
+            fenced = not fenced
+            continue
+        if not fenced and i not in tech:
+            out.append(i)
+    return out
+
+
+def _target_chars(target):
+    script = _LANG_SCRIPT.get(target, "latin")
+    chars = _TARGET_CHARS.get(script)
+    if chars is None:
+        rng = _SCRIPT_RANGES.get(script)
+        chars = rng if isinstance(rng, str) else ""
+    return chars
+
+
+def _letters(text):
+    return [c for c in text if c.isalpha()]
+
+
+def wrong_language(text, target, allowed=frozenset()):
+    """The language a whole answer is written in when it is not the target (an
+    English answer to a Korean conversation), else None. Code, URLs, paths and
+    terminal output are ignored."""
+    lines = (text or "").split("\n")
+    prose = "\n".join(_INLINE_CODE.sub(" ", lines[i]) for i in _prose_indexes(lines))
+    prose = re.sub(r"https?://\S+|\S+[\\/]\S+", " ", prose)
+    letters = _letters(prose)
+    if len(letters) < 40:
+        return None
+    lang = detect_language(prose)
+    if not lang or lang == target or lang in allowed:
+        return None
+    chars = _target_chars(target)
+    if not chars:
+        return None
+    own = len(re.findall("[%s]" % chars, prose))
+    if own * 100 >= len(letters) * 15:          # mostly mixed, not wholly foreign
+        return None
+    return lang
+
+
+def _whole_rewrite(text, target, allowed, user_text, rewriter, lang, hits, limit=80):
+    lines = text.split("\n")
+    chars = _target_chars(target)
+    idxs = []
+    for i in _prose_indexes(lines):
+        body = _INLINE_CODE.sub(" ", lines[i])
+        if len([c for c in _letters(body) if not re.match("[%s]" % chars, c)]) >= 3:
+            idxs.append(i)
+    if not idxs:
+        return text
+    hits.append(("whole-%s" % ("rewrite" if rewriter else "mark"), lang, lines[idxs[0]].strip()[:60]))
+    if rewriter is None:
+        return text
+    idxs = idxs[:limit]
+    try:
+        got = rewriter([lines[i] for i in idxs], target, allowed, user_text) or []
+    except Exception as exc:  # the answer must never be lost
+        log.warning("pure-language: whole-answer rewrite failed: %s", exc)
+        return text
+    for i, g in zip(idxs, got):
+        if g and g.strip() and _structure_ok(lines[i], g) and re.search("[%s]" % chars, g):
+            hits.append(("rewritten", lines[i].strip()[:60], g.strip()[:60]))
+            lines[i] = g
+    return "\n".join(lines)
+
+
 def clean(text, user_words=(), user_cjk=(), rewrite=True, target="ko", allowed=frozenset(), user_text="",
           rewriter=None, max_lines=20, context=""):
     """Returns (cleaned_text, hits). Pure apart from the optional rewrite call.
@@ -822,17 +927,24 @@ def clean(text, user_words=(), user_cjk=(), rewrite=True, target="ko", allowed=f
     ``context``: other material of this turn the answer may quote word for word
     (tool and command output). Terminal, log and stack-trace lines are never touched."""
     allowed = frozenset(allowed)
+    pre_hits = []
+    lang = wrong_language(text, target, allowed)
+    if lang:                                  # the whole answer is in another language
+        text = _whole_rewrite(text, target, allowed, user_text, rewriter if rewrite else None,
+                              lang, pre_hits, limit=max(60, int(max_lines)))
+        return text, pre_hits                 # never sprinkle marks over an untranslated answer
     context = (user_text or "") + "\n" + (context or "")
     parts = _CODE_RE.split(text)
     code_terms = {w.lower() for c in parts[1::2] for w in re.findall(r"[A-Za-z]{2,}", c)}
     exempt = set(user_words) | code_terms
     user_cjk = set(user_cjk)
     kw = dict(target=target, allowed=allowed, user_text=user_text, context=context)
-    hits, pending, split_parts = [], [], {}
+    hits, pending, split_parts = pre_hits, [], {}
     for i in range(0, len(parts), 2):
         lines = parts[i].split("\n")
+        tech = technical_lines(lines)
         for j, line in enumerate(lines):
-            if is_technical(line):
+            if j in tech:
                 continue                          # pasted prompt / output / trace line
             r = _clean_line(line, exempt, user_cjk, final=not rewrite, **kw)
             hits.extend(r.hits)

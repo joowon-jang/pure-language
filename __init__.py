@@ -56,8 +56,9 @@ def _rewriter(lines, target, allowed, sample):
         schema_name="pure_language.lines",
         purpose="pure-language.rewrite",
         temperature=0.0,
-        max_tokens=200 + 120 * len(lines),
-        timeout=_CFG["timeout"],
+        max_tokens=200 + 160 * len(lines),
+        # a whole answer in the wrong language means many lines: allow more time (host cap 30 s)
+        timeout=min(25, max(_CFG["timeout"], 6 + len(lines) // 2)),
         **kwargs,
     )
     return E.parse_rewrite(getattr(result, "parsed", None), len(lines))

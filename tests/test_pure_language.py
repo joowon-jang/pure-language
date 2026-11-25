@@ -192,6 +192,56 @@ class TechnicalContext(unittest.TestCase):
         self.assertIsNone(H._on_transform(response_text=ans, session_id="t", turn_id="Q1"))
 
 
+WPR = ("PS C:\\Windows\\System32> wpr -status\r\n\r\nMicrosoft Windows Performance Recorder Version 10.0.26100 "
+       "(CoreSystem)\r\nCopyright (c) 2024 Microsoft Corporation. All rights reserved.\r\n\r\n"
+       "WPR recording is in progress...\r\n\r\nTime since start        : 00:00:15\r\nDropped event           : 0")
+EN_ANSWER = ("Tracing is running, in memory mode with no dropped events.\n\n"
+             "- **It starts on its own at boot.** `C:\\ProgramData\\trace.log` shows a successful start at 22:35.\n"
+             "- **Use the computer as usual.** If a GPU timeout happens again, just tell me.\n\n"
+             "```powershell\n& 'C:\\scratch\\wpr_remove.ps1'\n```\n\n"
+             "The most important item still open is changing your passwords.")
+
+
+class PastedOutputOnly(unittest.TestCase):
+    def test_output_only_message_keeps_language(self):
+        memo = {}
+        E.resolve_turn(memo, "w", "추적 설정 확인해줘", default="en")
+        target, allowed, _ = E.resolve_turn(memo, "w", WPR, default="en")
+        self.assertEqual((target, allowed), ("ko", frozenset({"ko"})))
+
+    def test_prompt_block_then_question(self):
+        target, _, _ = E.resolve_turn({}, "q", "PS C:\\> dir\nVolume in drive C has no label\n\nWhy does this fail?",
+                                      default="ko")
+        self.assertEqual(target, "en")
+
+
+class WholeAnswer(unittest.TestCase):
+    def test_detects_english_answer(self):
+        self.assertEqual(E.wrong_language(EN_ANSWER, "ko", {"ko"}), "en")
+        ok = ("추적은 잘 돌고 있습니다(`Dropped event : 0`).\n\n```\nWPR recording is in progress...\n"
+              "Time since start : 00:00:15\n```\n- `C:\\trace.log`를 보면 정상입니다.")
+        self.assertIsNone(E.wrong_language(ok, "ko", {"ko"}))
+        self.assertIsNone(E.wrong_language(EN_ANSWER, "en", {"en"}))
+        self.assertIsNone(E.wrong_language(EN_ANSWER, "ko", {"ko", "en"}))
+
+    def test_rewrites_whole_answer_keeping_code(self):
+        def fake(lines, target, allowed, sample):
+            return [E._PREFIX_RE.match(l).group(0) + "한국어 문장 " + " ".join(E._INLINE_CODE.findall(l))
+                    for l in lines]
+        out, hits = E.clean(EN_ANSWER, target="ko", allowed={"ko"}, rewriter=fake)
+        self.assertNotIn("Tracing", out)
+        self.assertIn("- 한국어 문장 `C:\\ProgramData\\trace.log`", out)
+        self.assertIn("& 'C:\\scratch\\wpr_remove.ps1'", out)
+        self.assertEqual(hits[0][:2], ("whole-rewrite", "en"))
+
+    def test_failed_rewrite_leaves_answer_untouched(self):
+        def boom(*a):
+            raise TimeoutError
+        out, _ = E.clean(EN_ANSWER, target="ko", allowed={"ko"}, rewriter=boom)
+        self.assertEqual(out, EN_ANSWER)          # no ⚠ sprinkled over every word
+        self.assertEqual(E.leaks(EN_ANSWER, target="ko", allowed={"ko"})[0][0], "whole-mark")
+
+
 class CliHooks(unittest.TestCase):
     """hooks/run.py as Claude Code and Codex call it (stdin JSON -> stdout JSON)."""
 
@@ -246,6 +296,14 @@ class CliHooks(unittest.TestCase):
         out = self.run_hook("stop", {"session_id": "c3", "stop_hook_active": False, "transcript_path": tr,
                                      "last_assistant_message": "결과는 \"Access is denied by the kernel debugger.\" 입니다."}, env)
         self.assertIsNone(out)
+
+    def test_claude_whole_answer_feedback(self):
+        env = {"CLAUDE_PLUGIN_DATA": self.data, "CLAUDE_CONFIG_DIR": self.home}
+        self.run_hook("prompt", {"session_id": "c4", "prompt": "추적 상태 확인해줘"}, env)
+        self.run_hook("prompt", {"session_id": "c4", "prompt": WPR}, env)
+        out = self.run_hook("stop", {"session_id": "c4", "stop_hook_active": False,
+                                     "last_assistant_message": EN_ANSWER}, env)
+        self.assertIn("written in English", out["hookSpecificOutput"]["additionalContext"])
 
     def test_sticky_across_processes(self):
         env = {"CLAUDE_PLUGIN_DATA": self.data, "CLAUDE_CONFIG_DIR": self.home}

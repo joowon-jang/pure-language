@@ -53,6 +53,10 @@ Technical material is not language either:
   `PS C:\>`, `$`, `kd>`, `>>>`, ANSI colour codes, timestamps, `Traceback`…)
   are ignored when choosing the target language, and such lines in an answer
   are left as they are.
+* A shell prompt line (`PS C:\> wpr -status`) starts an output block: the lines
+  after it count as command output (banners, status text) until a line in
+  another script or a question. A message that is only pasted output keeps the
+  conversation's language instead of switching to English.
 * Command and tool output of the current turn may be quoted word for word:
   a sentence like `결과에 "Access is denied." 라고 나옵니다` is kept. Only
   stretches of three or more words (or ten or more CJK characters, or
@@ -60,6 +64,16 @@ Technical material is not language either:
   such as a Japanese term from a fetched web page, is still treated as a leak.
   Hermes collects that output through `post_tool_call`; Claude Code and Codex
   read it from the session transcript.
+
+## Whole answers in the wrong language
+
+If the prose of an answer (code, paths and terminal output aside) is almost
+entirely in another language, for example an English reply in a Korean
+conversation, the whole answer is treated as one leak. Hermes rewrites every
+prose line in one call (code blocks, inline code, links and list structure are
+kept); if that call fails, the answer is left untouched rather than covered in
+`⚠` marks. Claude Code and Codex ask the model to repeat the reply in the right
+language.
 
 ## What each host can do
 

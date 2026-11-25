@@ -97,6 +97,13 @@ def on_prompt(data, codex):
 
 
 def _feedback(target, hits):
+    name = E.LANG_NAMES.get(target, target)
+    whole = [h for h in hits if str(h[0]).startswith("whole")]
+    if whole:
+        other = E.LANG_NAMES.get(whole[0][1], whole[0][1])
+        return ("[pure-language] Your last reply was written in %s, but this conversation is in %s. "
+                "Repeat the same reply in full, written in %s. Keep code blocks, commands, paths, "
+                "proper nouns and acronyms as they are." % (other, name, name))
     words = []
     for h in hits:
         w = str(h[1]).strip()
