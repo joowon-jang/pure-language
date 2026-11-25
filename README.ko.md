@@ -42,6 +42,14 @@ codex plugin marketplace add joowon-jang/pure-language
 codex plugin add pure-language@pure-language
 ```
 
+## 비용 줄이기
+
+- 매 턴 붙이는 지시문은 한 줄(40~100자)입니다. 긴 지시문(약 300자)은 섞임이 발견된 다음 턴에만 쓰고, 그 뒤에는 다시 한 줄로 돌아갑니다.
+- 깨끗한 답변은 모델을 호출하지 않습니다. 한국어는 단어표와 한자 독음으로 상당수를 직접 고칩니다.
+- 헤르메스에서 모델에게 다시 쓰게 할 때는 섞인 문장만 보냅니다. 문단 전체를 보내지 않습니다.
+- 다시 쓰기 모델은 작은 모델이면 충분합니다. 시험에서는 `claude-haiku-4-5`로 충분했습니다.
+- 클로드 코드와 코덱스는 섞인 단어가 한두 개면 추가 턴을 쓰지 않습니다. 대신 다음 턴 지시문을 강화합니다(`stop_min_hits`).
+
 ## 설정
 
 설정 파일은 선택 사항입니다. 헤르메스는 `$HERMES_HOME/pure-language.json`, 클로드 코드는 `~/.claude/pure-language.json`, 코덱스는 `$CODEX_HOME/pure-language.json`을 읽습니다. 한국어 사용자라면 아래처럼 두는 것을 권합니다.

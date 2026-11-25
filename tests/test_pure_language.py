@@ -242,6 +242,40 @@ class WholeAnswer(unittest.TestCase):
         self.assertEqual(E.leaks(EN_ANSWER, target="ko", allowed={"ko"})[0][0], "whole-mark")
 
 
+class Cost(unittest.TestCase):
+    def test_short_guard_by_default(self):
+        for lang in ("ko", "en", "ja", "zh", "fr", "th"):
+            self.assertLess(len(E.guard_for(lang, frozenset({lang}))), 110, lang)
+            self.assertGreater(len(E.guard_for(lang, frozenset({lang}), full=True)),
+                               len(E.guard_for(lang, frozenset({lang}))))
+
+    def test_hermes_full_guard_only_after_leak(self):
+        g1 = H._on_pre_llm(session_id="g", user_message="연봉 협상 팁 알려줘", turn_id="G1")
+        self.assertLess(len(g1), 110)
+        H._on_transform(response_text="보통 one week 걸리고 中小企業 기준입니다.", session_id="g", turn_id="G1")
+        g2 = H._on_pre_llm(session_id="g", user_message="그럼 신입은?", turn_id="G2")
+        self.assertGreater(len(g2), 200)
+        H._on_transform(response_text="신입은 보통 두 번입니다.", session_id="g", turn_id="G2")
+        g3 = H._on_pre_llm(session_id="g", user_message="경력은?", turn_id="G3")
+        self.assertLess(len(g3), 110)
+
+    def test_only_leaking_sentences_are_sent(self):
+        sent = []
+
+        def fake(lines, target, allowed, sample):
+            sent.extend(lines)
+            return [l.replace("tricky한", "까다로운") for l in lines]
+        line = ("설정 파일은 기본 폴더에 있습니다. 이 설정은 꽤 tricky한 편이라 주의해야 합니다. "
+                "변경 후에는 다시 시작해야 합니다. 나머지는 기본값으로 두면 됩니다.")
+        out, _ = E.clean(line, target="ko", allowed={"ko"}, rewriter=fake)
+        self.assertEqual(sent, ["이 설정은 꽤 tricky한 편이라 주의해야 합니다."])
+        self.assertEqual(out, line.replace("tricky한", "까다로운"))
+
+    def test_rewrite_budget(self):
+        self.assertLess(len(E.rewrite_instructions("ko", frozenset({"ko"}), "")), 260)
+        self.assertEqual(E.rewrite_max_tokens(["가" * 10]), 84)
+
+
 class CliHooks(unittest.TestCase):
     """hooks/run.py as Claude Code and Codex call it (stdin JSON -> stdout JSON)."""
 
@@ -262,11 +296,11 @@ class CliHooks(unittest.TestCase):
     def test_claude(self):
         env = {"CLAUDE_PLUGIN_DATA": self.data, "CLAUDE_CONFIG_DIR": self.home}
         out = self.run_hook("prompt", {"session_id": "c1", "prompt": "면접은 몇 번 하나요?"}, env)
-        self.assertIn("한글", out["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("한국어로만", out["hookSpecificOutput"]["additionalContext"])
         self.assertIsNone(self.run_hook("stop", {"session_id": "c1", "stop_hook_active": False,
                                                  "last_assistant_message": "보통 두 번입니다."}, env))
         out = self.run_hook("stop", {"session_id": "c1", "stop_hook_active": False,
-                                     "last_assistant_message": "보통 one week 걸리고 中小企業 기준입니다."}, env)
+                                     "last_assistant_message": "보통 one week 걸리고 中小企業 기준이며 tricky한 부분과 salary 협의가 있습니다."}, env)
         ctx = out["hookSpecificOutput"]["additionalContext"]
         self.assertIn("Korean", ctx)
         self.assertIn("one week", ctx)
@@ -280,8 +314,16 @@ class CliHooks(unittest.TestCase):
         self.assertIn("English", out["hookSpecificOutput"]["additionalContext"])
         self.assertEqual(self.run_hook("stop", {"session_id": "x1", "turn_id": "t1", "stop_hook_active": False,
                                                 "last_assistant_message": "It takes two weeks."}, env), {})
-        out = self.run_hook("stop", {"session_id": "x1", "turn_id": "t1", "stop_hook_active": False,
-                                     "last_assistant_message": "It takes 보통 two weeks."}, env)
+        # one stray word: no extra turn, but the next turn gets the full rule
+        self.assertEqual(self.run_hook("stop", {"session_id": "x1", "turn_id": "t1", "stop_hook_active": False,
+                                                "last_assistant_message": "It takes 보통 two weeks."}, env), {})
+        out = self.run_hook("prompt", {"session_id": "x1", "turn_id": "t2", "prompt": "And for juniors?"}, env)
+        self.assertIn("Do not mix Korean", out["hookSpecificOutput"]["additionalContext"])
+        out = self.run_hook("prompt", {"session_id": "x1", "turn_id": "t3", "prompt": "And for seniors?"}, env)
+        self.assertNotIn("Do not mix Korean", out["hookSpecificOutput"]["additionalContext"])
+        # several leaked words: ask for a correction
+        out = self.run_hook("stop", {"session_id": "x1", "turn_id": "t3", "stop_hook_active": False,
+                                     "last_assistant_message": "It takes 보통 two weeks, 대략 그 정도 for 신입."}, env)
         self.assertEqual(out["decision"], "block")
         self.assertIn("보통", out["reason"])
 

@@ -91,9 +91,11 @@ def on_prompt(data, codex):
         "user_cjk": sorted(set(E._CJK_RE.findall(msg)) | set(E._HANGUL_RUN.findall(msg)))[:400],
     })
     _save(session, st)
+    full = bool(st.pop("leaked", False))
+    _save(session, st)
     if not skip:
         _emit({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
-                                      "additionalContext": E.guard_for(target, allowed)}})
+                                      "additionalContext": E.guard_for(target, allowed, full=full)}})
 
 
 def _feedback(target, hits):
@@ -191,6 +193,15 @@ def on_stop(data, codex):
     if cfg["log"]:
         E.write_log(os.path.join(base, "pure-language.log"), session,
                     [("[%s] %s" % (target, h[0]),) + tuple(h[1:]) for h in hits])
+    # Asking the model to correct itself costs a whole extra turn. Do it for a reply in
+    # the wrong language or several leaks; for a stray word or two, only tighten the
+    # rule for the next turn.
+    st = _load(session)
+    st["leaked"] = True
+    _save(session, st)
+    whole = any(str(h[0]).startswith("whole") for h in hits)
+    if not whole and len({str(h[1]) for h in hits}) < cfg["stop_min_hits"]:
+        return _emit({}) if codex else None
     msg = _feedback(target, hits)
     if codex:
         _emit({"decision": "block", "reason": msg})

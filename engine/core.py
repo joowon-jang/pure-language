@@ -434,6 +434,18 @@ _GUARDS = {
            "专有名词、缩写、代码和路径除外。需要外语原文时请放在反引号或代码块中。"
            "其他外文字符会被自动检查。"),
 }
+# Short guards: injected every turn and kept in the conversation history, so every
+# token here is paid again on each later call. The full guards above are used only
+# on the turn after a leak was found.
+_GUARDS_SHORT = {
+    "ko": "[출력 규칙] 진행 설명까지 모두 한국어로만 쓴다. 외국어 원문은 백틱 안에 쓴다.",
+    "en": "[Output rule] Whole reply, progress notes included, in English only; foreign text only in backticks.",
+    "ja": "[出力ルール] 途中経過も含め全て日本語のみ。外国語の原文はバッククォート内に。",
+    "zh": "[输出规则] 包括过程说明在内全部只用中文。外文原文放在反引号内。",
+}
+_GUARD_SHORT_GENERIC = ("[Output rule] Whole reply, progress notes included, in {name} only; "
+                        "foreign text only in backticks.")
+_ALLOW_SHORT = {"ko": " 허용: {names}.", "ja": " 許可: {names}。", "zh": " 允许: {names}。"}
 _GUARD_GENERIC = ("[Output rule] Write this entire answer in {name} only, the language of the "
                   "user's message, including progress notes between tool calls; pasted command output "
                   "in another language does not change it. Do not mix in words or characters from other languages. "
@@ -448,15 +460,22 @@ _ALLOW_NOTE = {
 
 
 
-def guard_for(target, allowed):
-    base = _GUARDS.get(target) or _GUARD_GENERIC.format(name=LANG_NAMES.get(target, target))
+def guard_for(target, allowed, full=False):
+    """The rule text injected before the answer. ``full`` (after a leak) is the long,
+    explicit version; otherwise a one-line reminder keeps the per-turn cost low."""
+    name = LANG_NAMES.get(target, target)
+    if full:
+        base = _GUARDS.get(target) or _GUARD_GENERIC.format(name=name)
+    else:
+        base = _GUARDS_SHORT.get(target) or _GUARD_SHORT_GENERIC.format(name=name)
     extra = sorted(allowed - {target})
     if extra:
         if target == "ko":
             names = ", ".join(_KO_NAMES.get(l, l) for l in extra)
         else:
             names = ", ".join(LANG_NAMES.get(l, l) for l in extra)
-        base += _ALLOW_NOTE.get(target, _ALLOW_NOTE["en"]).format(names=names)
+        notes = _ALLOW_NOTE if full else _ALLOW_SHORT
+        base += notes.get(target, _ALLOW_NOTE["en"] if full else " Allowed: {names}.").format(names=names)
     return base
 
 
@@ -787,23 +806,22 @@ def _clean_line_raw(line, exempt, user_cjk, final=False, target="ko", allowed=fr
 
 
 def rewrite_instructions(target, allowed, sample):
-    if target == "ko":
-        text = ("아래 각 줄은 한국어 답변의 일부인데 영어 단어, 한자, 일본어 가나, 중국어가 섞여 있다. "
-                "각 줄을 뜻을 그대로 유지하면서 자연스러운 한국어로만 고쳐 써라. ")
-    else:
-        name = LANG_NAMES.get(target, target)
-        text = ("Each line below is part of an answer that must be written entirely in %s, "
-                "but it contains words or characters from other languages. Rewrite every line "
-                "in natural %s only, keeping the meaning exactly. " % (name, name))
-        if sample and target not in LANG_NAMES:
-            text += "The target language is the language of this sample: %s. " % sample[:200]
+    name = LANG_NAMES.get(target, target)
+    text = ("Each line mixes in words from other languages. Rewrite each line entirely in natural "
+            "%s, translating every foreign word; same meaning. " % name)
+    if sample and target not in LANG_NAMES:
+        text += "Target language = language of: %s. " % sample[:120]
     keep = sorted(allowed - {target})
     if keep:
-        text += "Text in %s is allowed and must be kept as is. " % ", ".join(LANG_NAMES.get(l, l) for l in keep)
-    text += ("Keep markdown symbols, numbers, inline code in backticks, URLs, file paths, proper "
-             "nouns and ACRONYMS unchanged. Do not add or remove content. Return the same number "
-             "of lines in the same order, without line numbers.")
+        text += "Keep %s text as is. " % ", ".join(LANG_NAMES.get(l, l) for l in keep)
+    text += ("Keep markdown, numbers, `code`, URLs, paths, names, ACRONYMS. "
+             "Same line count and order, no numbering.")
     return text
+
+
+def rewrite_max_tokens(lines):
+    """Output budget for a rewrite: roughly the input size plus headroom."""
+    return 64 + sum(len(l) for l in lines) * 2
 
 
 REWRITE_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["lines"],
@@ -920,6 +938,24 @@ def _whole_rewrite(text, target, allowed, user_text, rewriter, lang, hits, limit
     return "\n".join(lines)
 
 
+def _sentences(line):
+    """(start, end) of sentences in a line: split after . ! ? 。 when whitespace
+    follows and the point is outside inline code."""
+    out, start, ticks = [], 0, 0
+    for k, ch in enumerate(line):
+        if ch == "`":
+            ticks += 1
+        elif (ch in ".!?。！？" and ticks % 2 == 0 and k + 1 < len(line) and line[k + 1] == " "):
+            end = k + 1
+            while end < len(line) and line[end] == " ":
+                end += 1
+            out.append((start, k + 1))
+            start = end
+    if start < len(line):
+        out.append((start, len(line)))
+    return out
+
+
 def clean(text, user_words=(), user_cjk=(), rewrite=True, target="ko", allowed=frozenset(), user_text="",
           rewriter=None, max_lines=20, context=""):
     """Returns (cleaned_text, hits). Pure apart from the optional rewrite call.
@@ -954,10 +990,20 @@ def clean(text, user_words=(), user_cjk=(), rewrite=True, target="ko", allowed=f
         split_parts[i] = lines
     if pending:
         ck = lambda o: (target, tuple(sorted(allowed)), o)
-        todo = [o for _, _, o in pending if ck(o) not in _REWRITE_CACHE]
-        todo = list(dict.fromkeys(todo))[:max(1, int(max_lines))]
-        got = []
+        # Long lines: send only the sentences that leak, so the model writes (and bills)
+        # far fewer output tokens than the whole paragraph.
+        plans = []                                 # per pending line: [(start, end)] units
+        for _, _, orig in pending:
+            units = []
+            if len(orig) > 80:
+                for a, b in _sentences(orig):
+                    if _clean_line(orig[a:b], exempt, user_cjk, final=False, **kw).unresolved:
+                        units.append((a, b))
+            plans.append(units or [(0, len(orig))])
+        todo = [orig[a:b] for (_, _, orig), units in zip(pending, plans) for a, b in units]
+        todo = [u for u in dict.fromkeys(todo) if ck(u) not in _REWRITE_CACHE][:max(1, int(max_lines))]
         if todo and rewrite and rewriter is not None:
+            got = []
             try:
                 got = rewriter(todo, target, allowed, user_text) or []
             except Exception as exc:  # the answer must never be lost
@@ -967,17 +1013,25 @@ def clean(text, user_words=(), user_cjk=(), rewrite=True, target="ko", allowed=f
                     if len(_REWRITE_CACHE) >= _CACHE_MAX:
                         _REWRITE_CACHE.pop(next(iter(_REWRITE_CACHE)))
                     _REWRITE_CACHE[ck(o)] = g
-        for k, (i, j, orig) in enumerate(pending):
-            cand = _REWRITE_CACHE.get(ck(orig))
-            if cand is not None and cand.strip():
-                chk = _clean_line(cand, exempt, user_cjk, final=True, **kw)   # verify the rewrite
-                if not any(h[0].endswith("mark") for h in chk.hits):
-                    hits.append(("rewritten", orig.strip()[:60], chk.text.strip()[:60]))
-                    split_parts[i][j] = chk.text
-                    continue
-            fb = _clean_line(orig, exempt, user_cjk, final=True, **kw)        # deterministic fallback
-            hits.extend(h for h in fb.hits if h[0].endswith(("mark", "read")))
-            split_parts[i][j] = fb.text
+        for (i, j, orig), units in zip(pending, plans):
+            cand, pos, used = [], 0, 0
+            for a, b in units:                    # apply each verified unit; keep the rest
+                g = _REWRITE_CACHE.get(ck(orig[a:b]))
+                cand.append(orig[pos:a])
+                g = (g if (a, b) == (0, len(orig)) else (g or "").strip()) if g and g.strip() else None
+                if g is not None and not any(h[0].endswith("mark") for h in
+                                             _clean_line(g, exempt, user_cjk, final=True, **kw).hits):
+                    cand.append(g)
+                    used += 1
+                else:
+                    cand.append(orig[a:b])
+                pos = b
+            cand.append(orig[pos:])
+            fixed = _clean_line("".join(cand), exempt, user_cjk, final=True, **kw)   # rules + marks for leftovers
+            if used:
+                hits.append(("rewritten", orig.strip()[:60], fixed.text.strip()[:60]))
+            hits.extend(h for h in fixed.hits if h[0].endswith(("mark", "read")))
+            split_parts[i][j] = fixed.text
     for i, lines in split_parts.items():
         parts[i] = "\n".join(lines)
     return "".join(parts), hits

@@ -157,6 +157,7 @@ Optional JSON file; every key is optional.
 | `timeout` | `15` | Hermes: seconds for the rewrite call (3–25; Hermes stops hooks at 30) |
 | `max_lines` | `20` | Hermes: most lines sent in one rewrite call |
 | `stop_action` | `rewrite` | Claude Code / Codex: `rewrite` asks for a short correction, `off` only injects the guard |
+| `stop_min_hits` | `3` | Claude Code / Codex: distinct leaked words needed before asking for a correction (which costs an extra turn). Fewer only tighten the rule for the next turn; a reply in the wrong language always triggers it |
 | `log` | `false` | Write leak snippets (about 20 characters around each hit, never whole answers) to a local log |
 
 On Hermes the rewrite call uses the plugin's own auxiliary slot,
@@ -169,6 +170,25 @@ auxiliary:
     provider: anthropic
     model: claude-haiku-4-5
 ```
+
+## Cost
+
+The plugin is built to add as few tokens as possible:
+
+* **Per turn:** a one-line rule (about 40–100 characters) is added to your
+  message. The full rule (about 300 characters) is used only on the turn after a
+  leak was found, then it drops back to one line. Hosts keep this text in the
+  conversation history, so a short rule saves tokens on every later call.
+* **Clean answers:** no model call at all. Korean word tables and Hanja
+  readings fix many leaks locally.
+* **Leaky answers (Hermes):** only the sentences that leak are sent, not whole
+  paragraphs, with a short English instruction and an output budget sized to the
+  input. Results are cached.
+* **Rewrite model:** any small model is enough. Pin a cheap one to the
+  `pure_language_rewrite` slot (see above); `claude-haiku-4-5` handled both
+  single-word fixes and whole-answer rewrites in testing.
+* **Claude Code / Codex:** a stray word or two does not trigger an extra turn
+  (see `stop_min_hits`).
 
 ## Disclosures
 

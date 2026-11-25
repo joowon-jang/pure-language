@@ -56,7 +56,7 @@ def _rewriter(lines, target, allowed, sample):
         schema_name="pure_language.lines",
         purpose="pure-language.rewrite",
         temperature=0.0,
-        max_tokens=200 + 160 * len(lines),
+        max_tokens=E.rewrite_max_tokens(lines),
         # a whole answer in the wrong language means many lines: allow more time (host cap 30 s)
         timeout=min(25, max(_CFG["timeout"], 6 + len(lines) // 2)),
         **kwargs,
@@ -75,7 +75,9 @@ def _on_pre_llm(session_id="", user_message="", turn_id=None, **kwargs):
     if len(_STATE) > 200:
         for k in list(_STATE)[:-100]:
             _STATE.pop(k, None)
-    return None if skip else E.guard_for(target, allowed)
+    # the long rule text only on the turn after a leak; a one-line reminder otherwise
+    full = _MEMO.setdefault("leaked", {}).pop(key, False)
+    return None if skip else E.guard_for(target, allowed, full=full)
 
 
 def _on_post_tool(tool_name="", result=None, session_id="", turn_id=None, **kwargs):
@@ -116,6 +118,12 @@ def _on_transform(response_text="", session_id="", turn_id=None, **kwargs):
     except Exception:  # never lose the answer because of the cleaner
         log.warning("pure-language: cleaner failed", exc_info=True)
         return None
+    if any(not str(x[0]).startswith("rewritten") for x in hits):
+        leaked = _MEMO.setdefault("leaked", {})
+        leaked[session_id or "default"] = True
+        if len(leaked) > 200:
+            for k in list(leaked)[:-100]:
+                leaked.pop(k, None)
     if text == response_text:
         return None
     E.write_log(_log_path(), session_id, [("[%s] %s" % (st["target"], h[0]),) + tuple(h[1:]) for h in hits])
