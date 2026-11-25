@@ -86,6 +86,42 @@ _CODE_RE = re.compile(
     r"|`[^`\n]+`)",
     re.S | re.M,
 )
+# Pasted terminal / log material: prompts, continuation marks, ANSI colour codes,
+# stack traces, timestamps. Such lines are not anyone's prose in any language.
+_TERM_PROMPT_RE = re.compile(
+    r"^\s*(?:PS\s+[A-Za-z]:[\\/][^>\n]*>"          # PowerShell
+    r"|[A-Za-z]:[\\/][^>\n<|\"]*>(?!>)"            # cmd.exe
+    r"|(?:\d+:\s*)?[a-z]{1,3}d>"                    # WinDbg kd> / 0:000>
+    r"|\d+:\d+>"                                    # cdb 0:000>
+    r"|>>>?(?:\s|$)|\.\.\.\s"                       # python, PowerShell continuation
+    r"|[\w.-]+@[\w.-]+(?::[^\n$#]*)?[$#%](?:\s|$)"  # user@host:~$
+    r"|[$%]\s+\S)")                                 # $ command
+_TERM_MISC_RE = re.compile(
+    r"\x1b\[|\[\d{1,3}(?:;\d{1,3})*m|"              # ANSI colour codes (raw or stripped ESC)
+    r"^\s*Traceback \(most recent call last\)|^\s*File \"[^\"]+\", line \d+|"
+    r"^\s*at [\w.$<>]+\(.*\)\s*$|^\s*[\w.]+(?:Error|Exception|Warning)(?::|$)|"
+    r"^\s*\[?\d{4}-\d\d-\d\d[ T]\d\d:\d\d|^\s*\d\d:\d\d:\d\d[.,]\d+|"
+    r"^\s*(?:ERR|ERROR|WARN|WARNING|INFO|DEBUG|FATAL)[\]:\s]|"
+    r"^\s*[+-]{3} [ab]/|^@@ ")
+
+
+def is_technical(line):
+    """True for a pasted terminal, log or stack-trace line (never prose to fix)."""
+    if not line or not line.strip():
+        return False
+    if _TERM_PROMPT_RE.match(line) or _TERM_MISC_RE.search(line):
+        return True
+    body = line.strip()
+    if re.search("[\uAC00-\uD7A3\u3040-\u30FF\u4E00-\u9FFF]", body) or len(body) < 12:
+        return False
+    sym = len(re.findall(r"[\\/|<>{}\[\]=$*;:_@#%^~`\"'()0-9.-]", body))
+    return sym * 10 >= len(body.replace(" ", "")) * 4       # 40%+ symbols / digits
+
+
+def strip_technical(text):
+    return "\n".join(l for l in (text or "").splitlines() if not is_technical(l))
+
+
 _FOREIGN_ASK_RE = re.compile(
     r"(일본어|영어|영문|중국어|한자|원문)[^\n]{0,15}?(작성|써|쓰|번역|초안|만들|보내|준비|표현|예시|문구|메일|그대로)"
     r"|번역해|외국어 허용"
@@ -253,7 +289,7 @@ _PART_CMD = [
 _ALLOW_ALL_RE = re.compile(r"외국어 허용|allow foreign", re.I)
 
 def _strip_noise(msg):
-    msg = _CODE_RE.sub(" ", msg)
+    msg = strip_technical(_CODE_RE.sub(" ", msg))
     msg = re.sub(r"https?://\S+|\S+[\\/]\S+", " ", msg)
     return "\n".join(l for l in msg.splitlines() if not l.lstrip().startswith(">"))
 
@@ -339,10 +375,9 @@ def _instruction_language(msg):
     pasted foreign block followed by a question in another language works. `rest`
     is the remaining text (pasted / quoted material), used to allow those languages."""
     raw = [l for l in (msg or "").splitlines() if l.strip()]
-    for idx in range(len(raw) - 1, max(-1, len(raw) - 4), -1):
+    prose = [i for i, l in enumerate(raw) if not is_technical(l) and not l.lstrip().startswith(">")]
+    for idx in reversed(prose[-3:]):
         line = raw[idx]
-        if line.lstrip().startswith(">"):
-            continue
         lang = detect_language(line)
         if lang:
             return lang, "\n".join(raw[:idx] + raw[idx + 1:])
@@ -657,7 +692,56 @@ def _clean_latin(seg, exempt, res, final):
     return "".join(out)
 
 
-def _clean_line(line, exempt, user_cjk, final=False, target="ko", allowed=frozenset(), user_text=""):
+_TARGET_CHARS = {"hangul": "\uAC00-\uD7A3", "ja": "\u3040-\u30FF\u4E00-\u9FFF", "han": "\u4E00-\u9FFF",
+                 "latin": "A-Za-z\u00C0-\u024F"}
+_TECH_CH = re.compile(r"[\\/:._=<>|*\[\]{}()'\"$#@-]")
+
+
+def _verbatim_spans(line, target, context):
+    """Stretches of ``line`` written in another script that appear word for word in
+    ``context`` (the user's message, tool / command output of this turn): quoted
+    output, error messages, file names. Short single words never qualify, so a
+    leaked word stays caught even when the source material contains it."""
+    if not context:
+        return []
+    script = _LANG_SCRIPT.get(target, "latin")
+    chars = _TARGET_CHARS.get(script)
+    if chars is None:
+        rng = _SCRIPT_RANGES.get(script)
+        chars = rng if isinstance(rng, str) else None
+    if not chars:
+        return []
+    spans = []
+    for m in re.finditer("[^%s\\n]+" % chars, line):
+        a, b = m.start(), m.end()
+        while a < b and line[a] in " \t,.;!?()\"'“”‘’「」": a += 1
+        while b > a and line[b - 1] in " \t,.;!?()\"'“”‘’「」": b -= 1
+        piece = line[a:b]
+        if not piece or piece not in context:
+            continue
+        cjk = bool(_CJK_RE.search(piece) or _HANGUL_RUN.search(piece))
+        if (len(piece.split()) >= 3 or len(piece) >= 16 or (cjk and len(piece) >= 10)
+                or (_TECH_CH.search(piece) and len(piece) >= 6)):
+            spans.append((a, b))
+    return spans
+
+
+def _clean_line(line, exempt, user_cjk, final=False, target="ko", allowed=frozenset(), user_text="",
+                context=""):
+    spans = _verbatim_spans(line, target, context)
+    if not spans:
+        return _clean_line_raw(line, exempt, user_cjk, final, target, allowed, user_text)
+    keep, masked, pos = [], [], 0
+    for k, (a, b) in enumerate(spans):
+        masked.append(line[pos:a]); masked.append(chr(0xE000 + k)); keep.append(line[a:b]); pos = b
+    masked.append(line[pos:])
+    res = _clean_line_raw("".join(masked), exempt, user_cjk, final, target, allowed, user_text)
+    for k, piece in enumerate(keep):
+        res.text = res.text.replace(chr(0xE000 + k), piece)
+    return res
+
+
+def _clean_line_raw(line, exempt, user_cjk, final=False, target="ko", allowed=frozenset(), user_text=""):
     res = _Line()
     if target != "ko":
         res.text = _scan_foreign(line, target, allowed, exempt, user_text, res, final)
@@ -732,18 +816,24 @@ def _structure_ok(orig, new):
 
 
 def clean(text, user_words=(), user_cjk=(), rewrite=True, target="ko", allowed=frozenset(), user_text="",
-          rewriter=None, max_lines=20):
-    """Returns (cleaned_text, hits). Pure apart from the optional rewrite call."""
+          rewriter=None, max_lines=20, context=""):
+    """Returns (cleaned_text, hits). Pure apart from the optional rewrite call.
+
+    ``context``: other material of this turn the answer may quote word for word
+    (tool and command output). Terminal, log and stack-trace lines are never touched."""
     allowed = frozenset(allowed)
+    context = (user_text or "") + "\n" + (context or "")
     parts = _CODE_RE.split(text)
     code_terms = {w.lower() for c in parts[1::2] for w in re.findall(r"[A-Za-z]{2,}", c)}
     exempt = set(user_words) | code_terms
     user_cjk = set(user_cjk)
-    kw = dict(target=target, allowed=allowed, user_text=user_text)
+    kw = dict(target=target, allowed=allowed, user_text=user_text, context=context)
     hits, pending, split_parts = [], [], {}
     for i in range(0, len(parts), 2):
         lines = parts[i].split("\n")
         for j, line in enumerate(lines):
+            if is_technical(line):
+                continue                          # pasted prompt / output / trace line
             r = _clean_line(line, exempt, user_cjk, final=not rewrite, **kw)
             hits.extend(r.hits)
             if r.unresolved:
@@ -803,10 +893,10 @@ def write_log(path, session_id, hits):
         log.warning("pure-language: log write failed: %s", exc)
 
 
-def leaks(text, user_words=(), user_cjk=(), target="ko", allowed=frozenset(), user_text=""):
+def leaks(text, user_words=(), user_cjk=(), target="ko", allowed=frozenset(), user_text="", context=""):
     """Hits for a finished answer without rewriting anything (CLI adapters)."""
     _, hits = clean(text, user_words, user_cjk, rewrite=False, target=target,
-                    allowed=allowed or frozenset({target}), user_text=user_text)
+                    allowed=allowed or frozenset({target}), user_text=user_text, context=context)
     return [h for h in hits if h[0] != "rewritten"]
 
 
@@ -836,7 +926,8 @@ def resolve_turn(memo, session_id, msg, default="en"):
         _last[key] = target
     allowed = {target} | part
     # languages of pasted / quoted material are allowed (quoting, translating)
-    t = _CODE_RE.sub(" ", rest)
+    t = strip_technical(_CODE_RE.sub(" ", rest))
+    t = re.sub(r"https?://\S+|\S+[\\/]\S+", " ", t)
     c = _script_counts(t)
     if c["ko"] >= 6: allowed.add("ko")
     if c["ja"] >= 3: allowed.add("ja")

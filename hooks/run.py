@@ -107,7 +107,63 @@ def _feedback(target, hits):
     return ("[pure-language] Your last reply mixed in text that is not %s: %s. "
             "Restate only the sentences that contain it, rewritten entirely in %s, as a short "
             "correction under a one-line heading in %s. Do not repeat the rest of the reply. "
-            "Keep code, paths, proper nouns and acronyms as they are." % (name, shown, name, name))
+            "Keep code, paths, proper nouns and acronyms as they are; quoted command output or error "
+            "messages go in a code block." % (name, shown, name, name))
+
+
+_TOOL_TYPES = {"tool_result", "function_call_output", "custom_tool_call_output", "exec_command_end",
+               "mcp_tool_call_end", "patch_apply_end"}
+
+
+def _texts(node, out):
+    if isinstance(node, str):
+        out.append(node)
+    elif isinstance(node, list):
+        for x in node:
+            _texts(x, out)
+    elif isinstance(node, dict):
+        for k in ("content", "output", "text", "stdout", "stderr", "aggregated_output", "result"):
+            if k in node:
+                _texts(node[k], out)
+
+
+def _find_tool(node, out):
+    if isinstance(node, dict):
+        if node.get("type") in _TOOL_TYPES:
+            _texts(node, out)
+            return
+        for v in node.values():
+            _find_tool(v, out)
+    elif isinstance(node, list):
+        for x in node:
+            _find_tool(x, out)
+
+
+def _turn_tool_output(path, prompt, limit=300_000):
+    """Tool / command output since the user's last prompt, from the host transcript
+    (Claude Code and Codex both write JSON lines). Best effort: any error -> ""."""
+    if not path or not os.path.isfile(path):
+        return ""
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(max(0, os.path.getsize(path) - 4_000_000))
+            lines = fh.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return ""
+    start = 0
+    key = (prompt or "").strip()[:200]
+    if key:
+        for i in range(len(lines) - 1, -1, -1):
+            if key in lines[i] or json.dumps(key, ensure_ascii=False)[1:-1] in lines[i]:
+                start = i
+                break
+    out = []
+    for line in lines[start:]:
+        try:
+            _find_tool(json.loads(line), out)
+        except ValueError:
+            continue
+    return "\n".join(out)[-limit:]
 
 
 def on_stop(data, codex):
@@ -121,7 +177,8 @@ def on_stop(data, codex):
         return _emit({}) if codex else None
     target = turn["target"]
     hits = E.leaks(text, set(turn.get("user", [])), set(turn.get("user_cjk", [])), target=target,
-                   allowed=frozenset(turn.get("allowed") or [target]), user_text=turn.get("text", ""))
+                   allowed=frozenset(turn.get("allowed") or [target]), user_text=turn.get("text", ""),
+                   context=_turn_tool_output(data.get("transcript_path"), turn.get("text", "")))
     if not hits:
         return _emit({}) if codex else None
     if cfg["log"]:

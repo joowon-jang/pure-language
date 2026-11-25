@@ -47,6 +47,20 @@ Never touched: code blocks and inline code, URLs and paths, ACRONYMS, proper
 nouns, common tool names (`git`, `npm`, `docker`…), and anything you typed
 yourself in that message.
 
+Technical material is not language either:
+
+* Pasted terminal sessions, logs and stack traces (shell prompts such as
+  `PS C:\>`, `$`, `kd>`, `>>>`, ANSI colour codes, timestamps, `Traceback`…)
+  are ignored when choosing the target language, and such lines in an answer
+  are left as they are.
+* Command and tool output of the current turn may be quoted word for word:
+  a sentence like `결과에 "Access is denied." 라고 나옵니다` is kept. Only
+  stretches of three or more words (or ten or more CJK characters, or
+  technical strings) count as a quote, so a single word lifted from the output,
+  such as a Japanese term from a fetched web page, is still treated as a leak.
+  Hermes collects that output through `post_tool_call`; Claude Code and Codex
+  read it from the session transcript.
+
 ## What each host can do
 
 | | Hermes Agent | Claude Code | Codex |

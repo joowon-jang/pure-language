@@ -5,4 +5,5 @@ author: joowon-jang
 requires_hermes: ">=0.23.4"
 provides_hooks:
   - pre_llm_call
+  - post_tool_call
   - transform_llm_output

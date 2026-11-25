@@ -37,6 +37,8 @@ _CTX = None
 _TASK_OK = False
 _MEMO = {}       # sticky / last language per session
 _STATE = {}      # per-turn state recorded by pre_llm_call
+_TOOLS = {}      # tool / command output of the running turn (the answer may quote it)
+_TOOL_MAX = 200_000
 
 
 def _log_path():
@@ -75,6 +77,21 @@ def _on_pre_llm(session_id="", user_message="", turn_id=None, **kwargs):
     return None if skip else E.guard_for(target, allowed)
 
 
+def _on_post_tool(tool_name="", result=None, session_id="", turn_id=None, **kwargs):
+    """Remember this turn's tool output so quoting it word for word is not a leak."""
+    if result is None:
+        return None
+    text = result if isinstance(result, str) else str(result)
+    key = ("turn", turn_id) if turn_id else ("session", session_id or "default")
+    buf = _TOOLS.get(key, "")
+    if len(buf) < _TOOL_MAX:
+        _TOOLS[key] = (buf + "\n" + text)[:_TOOL_MAX]
+    if len(_TOOLS) > 50:
+        for k in list(_TOOLS)[:-25]:
+            _TOOLS.pop(k, None)
+    return None
+
+
 def _take_state(session_id, turn_id):
     """Only the turn that ran pre_llm_call is cleaned. Background agents sharing the
     session (memory/skill review forks, compression) fire no pre_llm_call for their
@@ -87,13 +104,14 @@ def _take_state(session_id, turn_id):
 
 def _on_transform(response_text="", session_id="", turn_id=None, **kwargs):
     st = _take_state(session_id, turn_id)
+    tools = _TOOLS.pop(("turn", turn_id) if turn_id else ("session", session_id or "default"), "")
     if st is None or st["skip"] or not response_text:
         return None
     try:
         text, hits = E.clean(response_text, st["user"], st["user_cjk"], target=st["target"],
                              allowed=st["allowed"] or frozenset({st["target"]}), user_text=st["text"],
                              rewriter=_rewriter if _CFG["rewrite"] else None,
-                             max_lines=_CFG["max_lines"])
+                             max_lines=_CFG["max_lines"], context=tools)
     except Exception:  # never lose the answer because of the cleaner
         log.warning("pure-language: cleaner failed", exc_info=True)
         return None
@@ -115,6 +133,7 @@ def register(ctx):
     except Exception as exc:  # older hosts without auxiliary tasks
         log.info("pure-language: auxiliary task not registered: %s", exc)
     ctx.register_hook("pre_llm_call", _on_pre_llm)
+    ctx.register_hook("post_tool_call", _on_post_tool)
     if _CFG["hold_stream"]:
         ctx.register_hook("transform_llm_output", _on_transform, hold_stream=True)
     else:

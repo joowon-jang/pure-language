@@ -134,7 +134,7 @@ class Hermes(unittest.TestCase):
 
         H.register(Ctx())
         self.assertEqual(seen["task"], "pure_language_rewrite")
-        self.assertEqual(seen["hooks"], ["pre_llm_call", "transform_llm_output"])
+        self.assertEqual(seen["hooks"], ["pre_llm_call", "post_tool_call", "transform_llm_output"])
 
 
 class Structure(unittest.TestCase):
@@ -143,6 +143,53 @@ class Structure(unittest.TestCase):
         self.assertFalse(E._structure_ok("- `x` 와 weight", "`x` 와 비중"))
         self.assertFalse(E._structure_ok("| a | weight |", "a 비중"))
         self.assertFalse(E._structure_ok("see `code`", "see code"))
+
+
+PASTE = ("PS C:\\Windows\\System32> & 'C:\\Program Files\\WindowsApps\\cdb.exe' -z C:\\dump.dmp "
+         "-c \"lm m vgk*; q\" | Select-String vgk\n>>\n\n11: kd> cdb: Reading initial command 'lm m vgk*; q'\n\n"
+         "이렇게 명령어 결과를 보여준 것처럼 맥락에 따라 다른 언어가 필요할 수 있어. 수정 가능할까?")
+TOOL = ("11: kd> cdb: Reading initial command 'lm m vgk*; q'\nAccess is denied.\n"
+        "fffff806`1a2b0000 fffff806`1a5c0000   vgk        (deferred)\n中小企業の採用ページです")
+
+
+class TechnicalContext(unittest.TestCase):
+    def test_pasted_terminal_is_not_a_language(self):
+        target, allowed, _ = E.resolve_turn({}, "p", PASTE, default="en")
+        self.assertEqual(target, "ko")
+        self.assertEqual(allowed, frozenset({"ko"}))      # was misread as Polish
+
+    def test_technical_lines(self):
+        for l in ["PS C:\\> dir", "$ npm install", "11: kd> !analyze -v", ">>> import os",
+                  "Traceback (most recent call last):", '  File "a.py", line 3, in <module>',
+                  "0x20001 Arg1=0x28 (I/O MMU)", "2026-11-25 17:55:01 ERROR boot failed",
+                  "joowon@box:~/src$ make"]:
+            self.assertTrue(E.is_technical(l), l)
+        for l in ["보통 일주일 걸립니다.", "Open the file and restart it.", "- `config.yaml`의 설정",
+                  "| 도구 | 설치 |", "> 인용문입니다", "## 요약"]:
+            self.assertFalse(E.is_technical(l), l)
+
+    def test_quoted_output_kept_leaks_still_caught(self):
+        ans = ("11: kd> cdb: Reading initial command 'lm m vgk*; q'\n"
+               "결과에 \"Reading initial command 'lm m vgk*; q'\"만 있고 모듈 줄이 없습니다.\n"
+               "권한 오류로 Access is denied. 라는 메시지가 보였습니다.\n"
+               "그 페이지는 中小企業 대상이고 보통 one week 걸립니다.")
+        out, hits = E.clean(ans, set(), set(), rewrite=False, target="ko", allowed={"ko"},
+                            user_text="실행해줘", context=TOOL)
+        lines = out.split("\n")
+        self.assertEqual(lines[:3], ans.split("\n")[:3])
+        self.assertIn("중소기업", lines[3])            # a short word from the source is still a leak
+        self.assertIn("one week⚠", lines[3])
+
+    def test_without_context_error_text_is_a_leak(self):
+        _, hits = E.clean("권한 오류로 Access is denied 라는 메시지가 보였습니다.", set(), set(),
+                          rewrite=False, target="ko", allowed={"ko"})
+        self.assertTrue(hits)
+
+    def test_hermes_tool_output_exempt(self):
+        H._on_pre_llm(session_id="t", user_message="덤프 확인해줘", turn_id="Q1")
+        H._on_post_tool(tool_name="terminal", result=TOOL, session_id="t", turn_id="Q1")
+        ans = "출력은 \"Reading initial command 'lm m vgk*; q'\" 한 줄뿐입니다."
+        self.assertIsNone(H._on_transform(response_text=ans, session_id="t", turn_id="Q1"))
 
 
 class CliHooks(unittest.TestCase):
@@ -187,6 +234,18 @@ class CliHooks(unittest.TestCase):
                                      "last_assistant_message": "It takes 보통 two weeks."}, env)
         self.assertEqual(out["decision"], "block")
         self.assertIn("보통", out["reason"])
+
+    def test_claude_transcript_tool_output(self):
+        env = {"CLAUDE_PLUGIN_DATA": self.data, "CLAUDE_CONFIG_DIR": self.home}
+        tr = os.path.join(self.data, "t.jsonl")
+        with open(tr, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"type": "user", "message": {"content": "덤프 결과 보여줘"}}, ensure_ascii=False) + "\n")
+            fh.write(json.dumps({"type": "user", "message": {"content": [{"type": "tool_result",
+                     "content": "Access is denied by the kernel debugger."}]}}) + "\n")
+        self.run_hook("prompt", {"session_id": "c3", "prompt": "덤프 결과 보여줘"}, env)
+        out = self.run_hook("stop", {"session_id": "c3", "stop_hook_active": False, "transcript_path": tr,
+                                     "last_assistant_message": "결과는 \"Access is denied by the kernel debugger.\" 입니다."}, env)
+        self.assertIsNone(out)
 
     def test_sticky_across_processes(self):
         env = {"CLAUDE_PLUGIN_DATA": self.data, "CLAUDE_CONFIG_DIR": self.home}
