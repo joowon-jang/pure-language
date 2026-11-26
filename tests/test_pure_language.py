@@ -245,7 +245,7 @@ class WholeAnswer(unittest.TestCase):
 class Cost(unittest.TestCase):
     def test_short_guard_by_default(self):
         for lang in ("ko", "en", "ja", "zh", "fr", "th"):
-            self.assertLess(len(E.guard_for(lang, frozenset({lang}))), 110, lang)
+            self.assertLess(len(E.guard_for(lang, frozenset({lang}))), 200, lang)
             self.assertGreater(len(E.guard_for(lang, frozenset({lang}), full=True)),
                                len(E.guard_for(lang, frozenset({lang}))))
 
@@ -307,6 +307,23 @@ class WovenIn(unittest.TestCase):
             self.assertEqual(self.c(ok, frozenset({"ko"}))[0], ok)
 
 
+class Guard(unittest.TestCase):
+    def test_asks_for_korean_terms_not_bare_originals(self):
+        g = E.guard_for("ko", frozenset({"ko"}))
+        self.assertIn("한국어로 옮기", g)
+        self.assertIn("내정 취소(`内定取消し`)", g)
+        self.assertNotIn("원문은 백틱 안에 쓴다", g)   # that wording produced answers full of bare Japanese terms
+
+    def test_pasted_languages_are_not_advertised(self):
+        msg = ("참고용으로 붙여줄게.\nI now have thorough information. Let me compose the answer.\n"
+               "内定は始期付解約権留保付労働契約が成立したものとされる。\n\n이런 식이야")
+        g = H._on_pre_llm(session_id="pa", user_message=msg, turn_id="PA1")
+        self.assertNotIn("허용", g)
+        self.assertIn("ja", H._STATE[("turn", "PA1")]["allowed"])   # still tolerated as quotes
+        g = H._on_pre_llm(session_id="pb", user_message="일본어로 메일 초안 써줘", turn_id="PB1")
+        self.assertIn("일본어", g)
+
+
 class Deadline(unittest.TestCase):
     def setUp(self):
         H._BREAKER["until"] = 0.0
@@ -356,7 +373,7 @@ class CliHooks(unittest.TestCase):
     def test_claude(self):
         env = {"CLAUDE_PLUGIN_DATA": self.data, "CLAUDE_CONFIG_DIR": self.home}
         out = self.run_hook("prompt", {"session_id": "c1", "prompt": "면접은 몇 번 하나요?"}, env)
-        self.assertIn("한국어로만", out["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("한국어로 쓴다", out["hookSpecificOutput"]["additionalContext"])
         self.assertIsNone(self.run_hook("stop", {"session_id": "c1", "stop_hook_active": False,
                                                  "last_assistant_message": "보통 두 번입니다."}, env))
         out = self.run_hook("stop", {"session_id": "c1", "stop_hook_active": False,

@@ -95,7 +95,8 @@ def on_prompt(data, codex):
     _save(session, st)
     if not skip:
         _emit({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
-                                      "additionalContext": E.guard_for(target, allowed, full=full)}})
+                                      "additionalContext": E.guard_for(target, frozenset({target} | E.requested_languages(msg)),
+                                                                         full=full)}})
 
 
 def _feedback(target, hits):

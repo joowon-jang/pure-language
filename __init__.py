@@ -106,7 +106,7 @@ def _on_pre_llm(session_id="", user_message="", turn_id=None, **kwargs):
             _STATE.pop(k, None)
     # the long rule text only on the turn after a leak; a one-line reminder otherwise
     full = _MEMO.setdefault("leaked", {}).pop(key, False)
-    return None if skip else E.guard_for(target, allowed, full=full)
+    return None if skip else E.guard_for(target, frozenset({target} | E.requested_languages(msg)), full=full)
 
 
 def _on_post_tool(tool_name="", result=None, session_id="", turn_id=None, **kwargs):

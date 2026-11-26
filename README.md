@@ -65,6 +65,17 @@ Technical material is not language either:
   Hermes collects that output through `post_tool_call`; Claude Code and Codex
   read it from the session transcript.
 
+## How the guard is worded
+
+The guard asks for translated terms, with the original added once in
+parentheses only when it helps: `내정 취소(`内定取消し`)`. An earlier wording
+("put foreign text in backticks") led models to keep source terms instead of
+translating them, giving answers full of backticked Japanese the reader could
+not read. Languages found in pasted material are tolerated as quotes but are
+never announced as "allowed" in the guard, because models read that as
+permission to write in them; only languages the user explicitly asks for are
+announced.
+
 ## Whole answers in the wrong language
 
 If the prose of an answer (code, paths and terminal output aside) is almost

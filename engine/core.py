@@ -27,13 +27,11 @@ _REWRITE_CACHE = {}         # (target, allowed, line) -> rewritten line
 _CACHE_MAX = 500
 
 _GUARD = (
-    "[출력 규칙] 이 답변은 반드시 한글로만 작성한다. 도구를 쓰는 중간에 남기는 진행 설명도 마찬가지다. "
-    "붙여넣은 명령 출력이나 영어 오류 메시지를 받아도 답변 언어는 바꾸지 않는다. "
-    "중국어·일본어 글자(한자, 가나)를 한글 단어 대신 쓰지 말고, "
-    "문장 중간에 영어 단어나 로마자를 섞지 않는다(예: `weight` → 비중, `log를` → 기록을). "
-    "고유명사·약어·코드·경로는 예외로 허용한다. "
-    "외국어를 예시로 보여주거나 원문이 꼭 필요하면 반드시 백틱(인라인 코드)이나 코드 블록 안에 쓴다. "
-    "그 밖의 외국 문자는 자동으로 검사된다."
+    "[출력 규칙] 진행 설명까지 모두 한국어로 쓴다. 외국어 용어는 반드시 한국어로 옮겨 쓴다. "
+    "원문이 꼭 필요하면 처음 한 번만 한국어 뒤 괄호 안 백틱으로 덧붙인다. 예: 내정 취소(`内定取消し`). "
+    "원문을 한국어 대신 쓰거나, 한국어 문장에 외국어 단어를 붙여 쓰지 않는다(`日本の採用에서는`, `legally 검토`처럼 쓰지 않는다). "
+    "외국어 자료를 읽었거나 붙여넣은 출력이 외국어여도 답변 언어는 바꾸지 않는다. "
+    "코드, 명령, 경로, 고유명사, 약어는 그대로 둔다."
 )
 
 # ------------------------------------------------------------------ data
@@ -438,13 +436,17 @@ _GUARDS = {
 # token here is paid again on each later call. The full guards above are used only
 # on the turn after a leak was found.
 _GUARDS_SHORT = {
-    "ko": "[출력 규칙] 진행 설명까지 모두 한국어로만 쓴다. 외국어 원문은 백틱 안에 쓴다.",
-    "en": "[Output rule] Whole reply, progress notes included, in English only; foreign text only in backticks.",
-    "ja": "[出力ルール] 途中経過も含め全て日本語のみ。外国語の原文はバッククォート内に。",
-    "zh": "[输出规则] 包括过程说明在内全部只用中文。外文原文放在反引号内。",
+    "ko": ("[출력 규칙] 진행 설명까지 모두 한국어로 쓴다. 외국어 용어는 한국어로 옮기고, "
+           "원문이 꼭 필요하면 처음 한 번만 뒤에 괄호와 백틱으로 덧붙인다. 예: 내정 취소(`内定取消し`)"),
+    "en": ("[Output rule] Whole reply, progress notes included, in English. Translate foreign terms; "
+           "if the original is needed, add it once after the English in parentheses and backticks."),
+    "ja": ("[出力ルール] 途中経過も含め全て日本語で書く。外国語の用語は日本語に訳し、"
+           "原文が必要なら初出のみ訳語の後に括弧とバッククォートで添える。"),
+    "zh": "[输出规则] 包括过程说明在内全部用中文。外文术语要译成中文，必要时仅首次在译文后用括号和反引号附原文。",
 }
-_GUARD_SHORT_GENERIC = ("[Output rule] Whole reply, progress notes included, in {name} only; "
-                        "foreign text only in backticks.")
+_GUARD_SHORT_GENERIC = ("[Output rule] Whole reply, progress notes included, in {name}. Translate "
+                        "foreign terms; if the original is needed, add it once after the translation in "
+                        "parentheses and backticks.")
 _ALLOW_SHORT = {"ko": " 허용: {names}.", "ja": " 許可: {names}。", "zh": " 允许: {names}。"}
 _GUARD_GENERIC = ("[Output rule] Write this entire answer in {name} only, the language of the "
                   "user's message, including progress notes between tool calls; pasted command output "
@@ -458,6 +460,13 @@ _ALLOW_NOTE = {
     "zh": " 但用户要求的{names}内容可以保留（最好放在代码块中）。",
 }
 
+
+
+def requested_languages(msg):
+    """Languages the user explicitly asked to appear (draft in Japanese, translate into
+    French). Only these are announced in the guard; languages of pasted material are
+    tolerated as quotes but never advertised, or the model takes them as permission."""
+    return set(_find_cmd(_PART_CMD, msg or ""))
 
 
 def guard_for(target, allowed, full=False):
