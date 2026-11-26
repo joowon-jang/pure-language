@@ -2,7 +2,7 @@
   "id": "pure-language",
   "name": "Pure Language",
   "description": "Keeps every answer in the conversation's language: no stray foreign words or characters.",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "categories": [
     "other"
   ],

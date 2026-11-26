@@ -135,7 +135,33 @@ class Hermes(unittest.TestCase):
         H.register(Ctx())
         self.assertEqual(seen["task"], "pure_language_rewrite")
         self.assertEqual(seen["hooks"], ["pre_llm_call", "post_tool_call", "transform_tool_result",
-                                         "transform_llm_output"])
+                                         "on_interim_message", "transform_llm_output"])
+
+    def test_progress_note_feedback(self):
+        H._on_pre_llm(session_id="n", user_message="이 계정을 지워 줘", turn_id="N1")
+        first = H._on_tool_result(result="ok", session_id="n", turn_id="N1")
+        self.assertIn("[출력 규칙] 진행 설명까지", first)
+        H._on_interim(text="Deleting it. If the feature runs again, Windows will recreate it.",
+                      session_id="n", turn_id="N1")
+        fixed = H._on_tool_result(result="done", session_id="n", turn_id="N1")
+        self.assertIn("방금 쓴 진행 설명이 한국어가 아니었다", fixed)
+        # a Korean note brings back the normal one-line rule
+        H._on_interim(text="계정을 지웠습니다. 남은 폴더를 확인하겠습니다.", session_id="n", turn_id="N1")
+        self.assertIn("[출력 규칙] 진행 설명까지", H._on_tool_result(result="x", session_id="n", turn_id="N1"))
+        # the next turn starts with the full rule
+        guard = H._on_pre_llm(session_id="n", user_message="고마워", turn_id="N2")
+        self.assertIn("legally 검토", guard)
+
+    def test_history_note_leak(self):
+        history = [{"role": "user", "content": "지워 줘"},
+                   {"role": "assistant", "content": "Deleting it now, then checking the folder.",
+                    "tool_calls": [{"id": "1"}]},
+                   {"role": "tool", "content": "ok"},
+                   {"role": "assistant", "content": "지웠습니다."}]
+        guard = H._on_pre_llm(session_id="h", user_message="다음은?", turn_id="H1", conversation_history=history)
+        self.assertIn("legally 검토", guard)
+        self.assertIn("방금 쓴 진행 설명이", H._on_tool_result(result="ok", session_id="h", turn_id="H1"))
+        self.assertIn("[출력 규칙] 진행 설명까지", H._on_tool_result(result="ok", session_id="h", turn_id="H1"))
 
     def test_tool_result_reminder(self):
         H._on_pre_llm(session_id="s", user_message="작업 관리자에서 이 프로세스가 뭔지 알아봐 줘", turn_id="R1")
@@ -518,6 +544,14 @@ class NotACommand(unittest.TestCase):
         note = ("[IMPORTANT: Background process proc_1 completed normally (exit code 0).\nCommand: npm run build\n"
                 "Output:\n[… output truncated]\n   Compiling tauri v2.11.5\n    Finished release profile")
         self.assertEqual(E.resolve_turn(memo, "s", note, default="en")[0], "ko")
+
+    def test_short_english_word_keeps_language(self):
+        memo = {}
+        E.resolve_turn(memo, "s", "한국어로 하라고", default="en")
+        for word in ("continue", "ok", "go on", "yes please"):
+            self.assertEqual(E.resolve_turn(memo, "s", word, default="en")[0], "ko", word)
+        self.assertEqual(E.resolve_turn({}, "s", "continue", default="ko")[0], "ko")   # fresh process
+        self.assertEqual(E.resolve_turn(memo, "s", "answer in English", default="ko")[0], "en")
 
     def test_own_rule_line_ignored(self):
         msg = "계속\n\n[Output rule] Write this entire answer in English only."

@@ -989,7 +989,7 @@ def _letters(text):
     return [c for c in text if c.isalpha()]
 
 
-def wrong_language(text, target, allowed=frozenset()):
+def wrong_language(text, target, allowed=frozenset(), min_letters=40):
     """The language a whole answer is written in when it is not the target (an
     English answer to a Korean conversation), else None. Code, URLs, paths and
     terminal output are ignored."""
@@ -997,7 +997,7 @@ def wrong_language(text, target, allowed=frozenset()):
     prose = "\n".join(_INLINE_CODE.sub(" ", lines[i]) for i in _prose_indexes(lines))
     prose = re.sub(r"https?://\S+|\S+[\\/]\S+", " ", prose)
     letters = _letters(prose)
-    if len(letters) < 40:
+    if len(letters) < min_letters:
         return None
     lang = detect_language(prose)
     if not lang or lang == target or lang in allowed:
@@ -1190,6 +1190,8 @@ def resolve_turn(memo, session_id, msg, default="en"):
     if once:
         _sticky.pop(key, None)
     inst, rest = _instruction_language(msg)
+    if inst and inst != (_last.get(key) or default) and _short_latin(msg, rest):
+        inst = None   # "continue", "ok", "go on": a short English word does not switch the language
     if full:
         target = full[-1]
     else:
@@ -1217,3 +1219,34 @@ def resolve_turn(memo, session_id, msg, default="en"):
     return target, frozenset(allowed), skip
 
 
+def _short_latin(msg, rest):
+    own = msg.replace(rest, "") if rest else msg
+    words = re.findall(r"[A-Za-zÀ-ÿĀ-ž']+", own)
+    return (len(words) <= 3 and sum(len(w) for w in words) < 25
+            and not any(ch.isalpha() and ord(ch) > 0x24F for ch in own))
+
+
+# Said right after a progress note (the text between tool calls) came out in another language.
+_NOTE_FEEDBACK = {
+    "ko": "[출력 규칙] 방금 쓴 진행 설명이 한국어가 아니었다. 다음 진행 설명과 답변은 모두 한국어로 쓴다. "
+          "이 대화의 앞선 진행 설명이 다른 언어였어도 따라 하지 않는다.",
+    "en": "[Output rule] Your last progress note was not in English. Write every following note and the answer "
+          "in English, even if earlier notes in this conversation were not.",
+    "ja": "[出力ルール] 直前の進捗メモが日本語ではなかった。以降の進捗メモと回答はすべて日本語で書く。"
+          "この会話の以前のメモが他の言語でも真似しない。",
+    "zh": "[输出规则] 刚才的进度说明不是中文。之后的进度说明和回答全部用中文写，即使本对话之前的说明用了其他语言也不要模仿。",
+}
+
+
+def note_feedback(target):
+    """The correction added after a progress note written in the wrong language."""
+    if target in _NOTE_FEEDBACK:
+        return _NOTE_FEEDBACK[target]
+    name = LANG_NAMES.get(target, target)
+    return (f"[Output rule] Your last progress note was not in {name}. Write every following note and the "
+            f"answer in {name}, even if earlier notes in this conversation were not.")
+
+
+def note_off_language(text, target, allowed=frozenset()):
+    """A progress note (short text before a tool call) written in another language."""
+    return wrong_language(text, target, allowed, min_letters=12)

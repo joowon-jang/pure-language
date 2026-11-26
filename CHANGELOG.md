@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2
+
+Hermes watches each progress note (`on_interim_message`); when one comes out in another language, the next tool result carries an explicit correction instead of the plain rule. When earlier progress notes in the conversation are in the wrong language (the model copies its own habit), the turn starts with the full rule and the first tool result carries the correction.
+A message of a few Latin-script words (`continue`, `ok`, `go on`) keeps the conversation's language, or the configured default right after a restart, instead of switching to English.
+
 ## 0.2.1
 
 Progress notes between tool calls stay in the answer language: Hermes appends the one-line rule to each tool result (`transform_tool_result`; English output in an English turn is left alone; `tool_reminder: false` turns it off).

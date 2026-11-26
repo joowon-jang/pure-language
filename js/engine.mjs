@@ -767,13 +767,13 @@ function proseIndexes(lines) {
 const letters = (text) => [...text].filter(isAlpha);
 
 /** The language a whole answer is written in when it is not the target, else null. */
-export function wrongLanguage(text, target, allowed = new Set()) {
+export function wrongLanguage(text, target, allowed = new Set(), minLetters = 40) {
   allowed = new Set(allowed);
   const lines = (text || "").split("\n");
   let prose = proseIndexes(lines).map((i) => lines[i].replace(INLINE_CODE, " ")).join("\n");
   prose = prose.replace(URL_OR_PATH, " ");
   const lets = letters(prose);
-  if (lets.length < 40) return null;
+  if (lets.length < minLetters) return null;
   const lang = detectLanguage(prose);
   if (!lang || lang === target || allowed.has(lang)) return null;
   const chars = targetChars(target);
@@ -983,6 +983,13 @@ export function userTokens(msg) {
 const ONCE_RE = /이번(?:만|에는|엔)|이 질문(?:만|에는|은)|just (?:this|once)|this time|今回(?:だけ)?|这次|這次/i;
 
 /** Decide { target, allowed, skip } for this turn; ``memo`` persists between turns. */
+function shortLatin(msg, rest) {
+  const own = rest ? msg.split(rest).join("") : msg;
+  const words = own.match(/[A-Za-zÀ-ÿĀ-ž']+/g) || [];
+  return words.length <= 3 && words.reduce((n, w) => n + w.length, 0) < 25 &&
+    ![...own].some((ch) => /\p{L}/u.test(ch) && ch.codePointAt(0) > 0x24f);
+}
+
 export function resolveTurn(memo, sessionId, msg, def = "en") {
   const key = sessionId || "default";
   memo.sticky ??= {};
@@ -995,7 +1002,9 @@ export function resolveTurn(memo, sessionId, msg, def = "en") {
   const part = set(findCmd(PART_CMD, msg));
   const once = full.length > 0 && ONCE_RE.test(msg);
   if (once) delete sticky[key];
-  const [inst, rest] = instructionLanguage(msg);
+  let [inst, rest] = instructionLanguage(msg);
+  // "continue", "ok", "go on": a short English word does not switch the language
+  if (inst && inst !== (last[key] || def) && shortLatin(msg, rest)) inst = null;
   const target = full.length ? full[full.length - 1] : sticky[key] || inst || last[key] || def;
   if (!once) last[key] = target;
   const allowed = new Set([target, ...part]);

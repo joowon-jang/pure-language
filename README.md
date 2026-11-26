@@ -40,7 +40,8 @@ Only requests count as commands: `영어로 대답해` switches, while `왜 영�
 earlier replies and do not. Notices and wrapper tags the host adds to your
 message (`[System: ...]`, `[OUT-OF-BAND USER MESSAGE …]`) and the plugin's own
 rule line are ignored; a message that is only a host notice (a background job
-finished) keeps the previous language.
+finished) keeps the previous language, and so does a message of a few English
+words (`continue`, `ok`).
 
 ## What counts as a leak
 
@@ -215,7 +216,7 @@ Optional JSON file; every key is optional.
 | `max_lines` | `20` | Hermes: most lines sent in one rewrite call |
 | `stop_action` | `rewrite` | Claude Code / Codex: `rewrite` asks for a short correction, `off` only injects the guard |
 | `stop_min_hits` | `1` | Claude Code / Codex / OpenClaw / Pi: distinct leaked words needed before asking the model for a correction (an extra turn). Raise it to save cost; fewer only tighten the rule for the next turn. A reply in the wrong language always triggers it |
-| `tool_reminder` | `true` | Hermes: add the one-line rule after each tool result, so progress notes written after reading (usually English) tool output stay in the answer language. English output in an English turn is left alone |
+| `tool_reminder` | `true` | Hermes: add the one-line rule after each tool result, so progress notes written after reading (usually English) tool output stay in the answer language. English output in an English turn is left alone. When a progress note comes out in another language (or earlier notes in the conversation did), the next tool result says so explicitly |
 | `local_fix` | `fallback` | `fallback`: the model rewrites every leaking line, word tables and Hanja readings only when it cannot. `first`: rules first, the model only for what they cannot fix (cheaper, can read awkwardly) |
 | `rewrite_model` | (empty) | Oh My Pi / Pi: model for rewrites as `provider/id` (default: Oh My Pi's `@smol` role, then the session model). OpenClaw: model ref for `api.runtime.llm.complete`; choosing one needs `plugins.entries.pure-language.llm.allowModelOverride: true` |
 | `log` | `false` | Write leak snippets (about 20 characters around each hit, never whole answers) to a local log |

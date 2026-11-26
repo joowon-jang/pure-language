@@ -104,8 +104,10 @@ def _on_pre_llm(session_id="", user_message="", turn_id=None, **kwargs):
     if len(_STATE) > 200:
         for k in list(_STATE)[:-100]:
             _STATE.pop(k, None)
+    # progress notes of earlier turns in the wrong language: the model copies its own habit
+    st["note_leak"] = not skip and _history_notes_off(kwargs.get("conversation_history"), target, allowed)
     # the long rule text only on the turn after a leak; a one-line reminder otherwise
-    full = _MEMO.setdefault("leaked", {}).pop(key, False)
+    full = _MEMO.setdefault("leaked", {}).pop(key, False) or st["note_leak"]
     return None if skip else E.guard_for(target, frozenset({target} | E.requested_languages(msg)), full=full)
 
 
@@ -134,6 +136,40 @@ def _peek_state(session_id, turn_id):
 _OTHER_SCRIPT_RE = re.compile(r"[^\x00-\u024F\u1E00-\u1EFF\u2000-\u2BFF\uFE00-\uFE0F\uFF00-\uFFEF]")
 
 
+def _history_notes_off(history, target, allowed, look_back=12):
+    """True when one of the recent progress notes (assistant text beside a tool call) is in
+    another language."""
+    if not isinstance(history, list):
+        return False
+    seen = 0
+    for msg in reversed(history):
+        if not isinstance(msg, dict) or msg.get("role") != "assistant" or not msg.get("tool_calls"):
+            continue
+        content = msg.get("content")
+        if isinstance(content, list):
+            content = " ".join(p.get("text", "") for p in content if isinstance(p, dict))
+        if isinstance(content, str) and content.strip():
+            if E.note_off_language(content, target, allowed):
+                return True
+            seen += 1
+            if seen >= look_back:
+                break
+    return False
+
+
+def _on_interim(text="", session_id="", turn_id="", **kwargs):
+    """A progress note came out; flag it when it is in the wrong language so the next tool
+    result carries a correction."""
+    st = _peek_state(session_id, turn_id or None)
+    if not st or st["skip"] or not isinstance(text, str):
+        return None
+    if E.note_off_language(text, st["target"], st["allowed"]):
+        st["note_leak"] = True
+        st["note_fix"] = True   # the next tool result says so explicitly
+        _MEMO.setdefault("leaked", {})[session_id or "default"] = True
+    return None
+
+
 def _on_tool_result(tool_name="", result=None, session_id="", turn_id=None, **kwargs):
     """Remind the model of the answer language right after each tool result.
 
@@ -147,7 +183,11 @@ def _on_tool_result(tool_name="", result=None, session_id="", turn_id=None, **kw
     target = st["target"]
     if target == "en" and not _OTHER_SCRIPT_RE.search(result):
         return None   # English output in an English turn needs no reminder
-    rule = E.guard_for(target, frozenset({target} | E.requested_languages(st["text"])), full=False)
+    if st.pop("note_fix", False) or st.get("note_leak") and not st.get("note_told"):
+        st["note_told"] = True
+        rule = E.note_feedback(target)
+    else:
+        rule = E.guard_for(target, frozenset({target} | E.requested_languages(st["text"])), full=False)
     return result if not rule else result.rstrip() + "\n\n" + rule
 
 
@@ -202,6 +242,7 @@ def register(ctx):
     ctx.register_hook("post_tool_call", _on_post_tool)
     if _CFG["tool_reminder"]:
         ctx.register_hook("transform_tool_result", _on_tool_result)
+        ctx.register_hook("on_interim_message", _on_interim)
     if _CFG["hold_stream"]:
         ctx.register_hook("transform_llm_output", _on_transform, hold_stream=True)
     else:

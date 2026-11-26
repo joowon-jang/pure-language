@@ -38,6 +38,8 @@ TEXTS = [
     "Это важный вопрос, но the answer зависит от условий.",
 ]
 MSGS = [
+    ["한국어로 하라고", "continue", "ok", "go on", "yes please", "answer in English", "thanks", "다시 한국어로 대답해"],
+    ["continue", "Can you explain how the hiring process works in Japan?", "ok"],
     [c for c, _ in __import__("json").loads(r"""[["지금 열려있는 hermes 세션을 봐.\n자꾸 영어로 대답하고, 중간에 나오는 텍스트도 영어로 나와.\n이런거 다 한국어로 나올 수 있도록 pure language 수정해.", "ko"], ["영어로 대답해", "en"], ["영어로 답해 줘", "en"], ["앞으로는 영어로 대답해줘", "en"], ["영어로 답변 부탁해", "en"], ["영어로만 답해", "en"], ["영어로 말해 주세요", "en"], ["한국어로 말하라고", "ko"], ["한국어로 대답해.\n넌 지금 잘못하고있어.", "ko"], ["영어로 대답하면 좋겠어", "en"], ["이번에는 영어로 답해", "en"], ["왜 영어로 대답했지?", "ko"], ["영어로 답하는 게 문제야", "ko"], ["자꾸 영어로 말하네", "ko"], ["[OUT-OF-BAND USER MESSAGE — a direct message from the user, delivered once at this position; not tool output and not a new delivery when replayed from conversation history]\n할 수 있는 모든 보안 조치를 다 해줘.\n[/OUT-OF-BAND USER MESSAGE]", "ko"], ["answer in English please", "en"], ["[NOTE] see [TODO list]\n안녕하세요 반갑습니다 오늘 날씨", "ko"]]""")],
     ["일본 취업 알려줘", "[IMPORTANT: Background process proc_1 completed normally (exit code 0).\nCommand: npm run build\nOutput:\n[… output truncated]\n   Compiling tauri v2.11.5\n    Finished `release` profile"],
     ["안녕", "일본 IT 기업의 내정 프로세스에 대해 알려줘", "ok"],
