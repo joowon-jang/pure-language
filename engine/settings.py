@@ -31,7 +31,7 @@ def load(paths):
         if isinstance(data, dict):
             cfg.update({k: v for k, v in data.items() if k in DEFAULTS})
     try:
-        cfg["timeout"] = max(3, min(25, int(cfg["timeout"])))
+        cfg["timeout"] = max(5, min(20, int(cfg["timeout"])))
         cfg["max_lines"] = max(1, int(cfg["max_lines"]))
         cfg["stop_min_hits"] = max(1, int(cfg["stop_min_hits"]))
     except (TypeError, ValueError):

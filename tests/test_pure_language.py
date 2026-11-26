@@ -307,6 +307,35 @@ class WovenIn(unittest.TestCase):
             self.assertEqual(self.c(ok, frozenset({"ko"}))[0], ok)
 
 
+class Deadline(unittest.TestCase):
+    def setUp(self):
+        H._BREAKER["until"] = 0.0
+        self.saved = (H._CTX, H._call_model, H._CFG["timeout"])
+
+    def tearDown(self):
+        H._CTX, H._call_model, H._CFG["timeout"] = self.saved
+        H._BREAKER["until"] = 0.0
+
+    def test_slow_model_falls_back_in_time_and_pauses(self):
+        import time as _t
+
+        class Ctx:
+            llm = object()
+        H._CTX = Ctx()
+        H._CFG["timeout"] = 5
+        H._call_model = lambda *a: (_t.sleep(8), ["x"])[1]
+        H._on_pre_llm(session_id="d", user_message="설정 알려줘", turn_id="D1")
+        t0 = _t.time()
+        out = H._on_transform(response_text="반영까지 보통 one week 정도 걸립니다.", session_id="d", turn_id="D1")
+        self.assertLess(_t.time() - t0, 7)               # well under Hermes' 30 s hook limit
+        self.assertIn("one week⚠", out)                   # local fallback still visible
+        self.assertGreater(H._BREAKER["until"], _t.time())
+        H._on_pre_llm(session_id="d", user_message="또?", turn_id="D2")
+        t0 = _t.time()
+        H._on_transform(response_text="이것도 tricky한 부분입니다.", session_id="d", turn_id="D2")
+        self.assertLess(_t.time() - t0, 1)               # paused: no second wait
+
+
 class CliHooks(unittest.TestCase):
     """hooks/run.py as Claude Code and Codex call it (stdin JSON -> stdout JSON)."""
 

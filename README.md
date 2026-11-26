@@ -154,7 +154,7 @@ Optional JSON file; every key is optional.
 | `default_language` | `en` | Language used when a message is too short to detect and there is no earlier turn |
 | `rewrite` | `true` | Hermes: rewrite unfixable lines with the model (off = local rules and `⚠` only) |
 | `hold_stream` | `false` | Hermes: do not stream; show only the cleaned answer. If the cleaner fails, Hermes shows a fixed notice instead of the answer |
-| `timeout` | `15` | Hermes: seconds for the rewrite call (3–25; Hermes stops hooks at 30) |
+| `timeout` | `15` | Hermes: hard deadline in seconds for the rewrite call (5–20). Hermes cancels a hook after 30 s and then skips it for 60 s, so the plugin stops waiting first, keeps the local fixes, and pauses model rewrites for 10 minutes after a failure or timeout |
 | `max_lines` | `20` | Hermes: most lines sent in one rewrite call |
 | `stop_action` | `rewrite` | Claude Code / Codex: `rewrite` asks for a short correction, `off` only injects the guard |
 | `stop_min_hits` | `3` | Claude Code / Codex: distinct leaked words needed before asking for a correction (which costs an extra turn). Fewer only tighten the rule for the next turn; a reply in the wrong language always triggers it |

@@ -14,6 +14,7 @@ Settings: ``$HERMES_HOME/pure-language.json`` (see README). Optional log:
 import logging
 import os
 import re
+import threading
 import time
 
 from .engine import core as E
@@ -45,9 +46,37 @@ def _log_path():
     return os.path.join(_hermes_home(), "logs", "pure-language.log") if _CFG["log"] else None
 
 
+_BREAKER = {"until": 0.0}   # model rewrites paused after a failure (seconds since epoch)
+_PAUSE = 600
+
+
 def _rewriter(lines, target, allowed, sample):
-    if _CTX is None or not getattr(_CTX, "llm", None):
+    """Bounded model rewrite. Hermes cancels a hook that runs past 30 s and then skips
+    it for 60 s, which would deliver the raw answer with no fix at all. So the call
+    gets a hard deadline in a worker thread, and after a failure or timeout model
+    rewrites pause for 10 minutes (local fixes and marks still apply)."""
+    if _CTX is None or not getattr(_CTX, "llm", None) or time.time() < _BREAKER["until"]:
         return None
+    budget = min(20, max(5, _CFG["timeout"]))
+    box = {}
+
+    def work():
+        try:
+            box["v"] = _call_model(lines, target, allowed, sample)
+        except Exception as exc:  # reported below
+            box["e"] = exc
+    th = threading.Thread(target=work, name="pure-language-rewrite", daemon=True)
+    th.start()
+    th.join(budget)
+    if th.is_alive() or "e" in box:
+        _BREAKER["until"] = time.time() + _PAUSE
+        log.warning("pure-language: rewrite %s; model rewrites paused for %d s",
+                    "timed out after %ds" % budget if th.is_alive() else "failed: %s" % box["e"], _PAUSE)
+        return None
+    return box.get("v")
+
+
+def _call_model(lines, target, allowed, sample):
     kwargs = {"task": _TASK} if _TASK_OK else {}
     result = _CTX.llm.complete_structured(
         instructions=E.rewrite_instructions(target, allowed, sample),
@@ -58,7 +87,7 @@ def _rewriter(lines, target, allowed, sample):
         temperature=0.0,
         max_tokens=E.rewrite_max_tokens(lines),
         # a whole answer in the wrong language means many lines: allow more time (host cap 30 s)
-        timeout=min(25, max(_CFG["timeout"], 6 + len(lines) // 2)),
+        timeout=min(20, max(5, _CFG["timeout"])),
         **kwargs,
     )
     return E.parse_rewrite(getattr(result, "parsed", None), len(lines))
