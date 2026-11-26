@@ -162,7 +162,8 @@ Optional JSON file; every key is optional.
 
 On Hermes the rewrite call uses the plugin's own auxiliary slot,
 `pure_language_rewrite`. It follows your main model until you pin another one
-in **Settings › Models › Auxiliary › Language rewrite**, or in `config.yaml`:
+on the Models page (**Show auxiliary** → `Language rewrite` → **Change**), with
+`hermes config set auxiliary.pure_language_rewrite.model <model>`, or in `config.yaml`:
 
 ```yaml
 auxiliary:

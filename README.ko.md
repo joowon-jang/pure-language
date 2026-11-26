@@ -58,4 +58,25 @@ codex plugin add pure-language@pure-language
 { "default_language": "ko" }
 ```
 
+## 다시 쓰기 모델 고르기 (헤르메스)
+
+헤르메스에서 섞인 문장을 고쳐 쓸 때는 플러그인 전용 보조 모델 칸 `pure_language_rewrite`를 씁니다. 따로 고르지 않으면 평소 쓰는 기본 모델을 그대로 씁니다. 이 일은 작은 모델로도 충분하므로, 싼 모델을 지정하면 비용을 줄일 수 있습니다.
+
+**화면에서 고르기**
+
+1. 설정의 모델 화면을 엽니다.
+2. **Show auxiliary**를 눌러 보조 작업 목록을 펼칩니다.
+3. `Language rewrite` 줄의 **Change**를 누르고 공급자와 모델을 고른 뒤 **Switch**를 누릅니다.
+
+**명령으로 고르기**
+
+```bash
+hermes config set auxiliary.pure_language_rewrite.provider anthropic
+hermes config set auxiliary.pure_language_rewrite.model claude-haiku-4-5
+```
+
+"알 수 없는 설정 키"라는 경고가 나와도 값은 저장되고 동작합니다. 기본 모델로 되돌리려면 `config.yaml`에서 `auxiliary.pure_language_rewrite` 항목을 지우면 됩니다.
+
+클로드 코드와 코덱스는 답변을 바꿔치기할 수 없습니다. 그래서 대화 중인 모델에게 직접 다시 쓰게 하고, 고를 다시 쓰기 모델이 따로 없습니다.
+
 나머지 항목과 알려야 할 동작(모델 추가 호출, 로컬 상태 파일, 선택 기록)은 [영어 안내](README.md)에 있습니다.
