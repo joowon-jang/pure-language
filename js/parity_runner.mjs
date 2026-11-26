@@ -20,9 +20,11 @@ for (const c of cases) {
       out.push(res);
     } else if (c.op === "clean") {
       const tok = E.userTokens(c.user || "");
-      const r = E.cleanLocal(c.text, { target: c.target, allowed: c.allowed, userText: c.user || "",
-        userWords: tok.userWords, userCjk: tok.userCjk, context: c.context || "" }, true);
-      out.push([r.text, r.hits.map((h) => [h[0], h[1]]), E.wrongLanguage(c.text, c.target, new Set(c.allowed))]);
+      const opts = { target: c.target, allowed: c.allowed, userText: c.user || "",
+        userWords: tok.userWords, userCjk: tok.userCjk, context: c.context || "" };
+      const r = E.cleanLocal(c.text, opts, true);
+      const marked = E.cleanLocal(c.text, { ...opts, mark: true }, true);
+      out.push([r.text, marked.text, r.hits.map((h) => [h[0], h[1]]), E.wrongLanguage(c.text, c.target, new Set(c.allowed))]);
     } else if (c.op === "rewrite") {
       const fake = async (lines) => lines.map((l) => l.replace(/[A-Za-z]{3,}/g, "말"));
       const r = await E.clean(c.text, { target: c.target, allowed: c.allowed, rewriter: fake, maxLines: 20 });

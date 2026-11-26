@@ -18,6 +18,8 @@ DEFAULTS = {
                                 #   Hanja readings only when it cannot; "first": rules first (cheaper)
     "tool_reminder": True,      # Hermes: add the one-line rule after each tool result, where progress
                                 #   notes start drifting into the tool output's language
+    "mark": False,              # put ⚠ after a leak neither the model nor the rules could fix
+                                #   (default: leave it as written)
     "log": False,               # write hit snippets (not whole answers) to a local log file
 }
 

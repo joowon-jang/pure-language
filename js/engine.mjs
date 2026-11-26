@@ -415,7 +415,7 @@ function scanForeign(line, target, allowed, exempt, userText, res, final, script
   let pos = 0;
   for (const [a, b] of spans) {
     if (a < pos) continue;
-    out.push(line.slice(pos, a), "⚠");
+    out.push(line.slice(pos, b), MK);
     pos = b;
   }
   out.push(line.slice(pos));
@@ -516,10 +516,10 @@ function cleanCjk(seg, userCjk, res, final) {
         text += reading;
       } else {
         res.hits.push(["cjk-mark", piece, ctx]);
-        text += "⚠";
+        text += piece + MK;
       }
     }
-    if (text && text[0] !== "⚠" && isSyl(text[0])) {
+    if (text && text[0] !== MK && isSyl(text[0])) {
       const prev = start ? seg[start - 1] : "";
       if (!HANGUL_CH.test(prev)) text = initialRule(text[0]) + text.slice(1);
     }
@@ -563,7 +563,7 @@ function cleanLatin(seg, exempt, res, final, gluedOnly = false) {
       let pos = 0;
       for (const m of phrases) {
         const end = m.index + m[0].length;
-        out.push(seg.slice(pos, end), "⚠");
+        out.push(seg.slice(pos, end), MK);
         pos = end;
       }
       out.push(seg.slice(pos));
@@ -611,7 +611,7 @@ function cleanLatin(seg, exempt, res, final, gluedOnly = false) {
       out.push(word);
     } else {
       res.hits.push(["en-mark", word, ctx]);
-      out.push(word + "⚠");
+      out.push(word + MK);
     }
   }
   out.push(seg.slice(pos));
@@ -879,6 +879,10 @@ const join_ = (st) => {
 };
 
 /** Full cleaning. ``opts.rewriter(lines, target, allowed, sample)`` may be async. */
+// private-use placeholder put after a leak that stays unfixed; turned into ⚠ or dropped
+const MK = "\uE0A0";
+const unmark = (text, mark) => text.split(MK).join(mark ? "⚠" : "");
+
 export async function clean(text, opts = {}) {
   const rewrite = opts.rewrite ?? true;
   const rewriter = rewrite ? opts.rewriter ?? null : null;
@@ -947,12 +951,13 @@ export async function clean(text, opts = {}) {
       splitParts.get(i)[j] = fixed.text;
     });
   }
-  return { text: join_(st), hits };
+  // what neither the model nor the rules could fix: left as written, or flagged with ⚠
+  return { text: unmark(join_(st), opts.mark), hits };
 }
 
 /**
- * Synchronous local pass. ``final`` true: unfixable leaks get ⚠ marks (same as
- * clean() without a rewriter). ``final`` false: unfixable leaks are left as they
+ * Synchronous local pass. ``final`` true: unfixable leaks are final (⚠ with
+ * ``opts.mark``, same as clean() without a rewriter). ``final`` false: unfixable leaks are left as they
  * are and reported in ``unresolved`` (for hosts that ask the model to restate).
  */
 export function cleanLocal(text, opts = {}, final = true) {
@@ -963,7 +968,7 @@ export function cleanLocal(text, opts = {}, final = true) {
     return { text, hits: idxs.length ? [["whole-mark", lang, head(strip(text.split("\n")[idxs[0]]), 60)]] : [], unresolved: idxs.length > 0, whole: lang };
   }
   const st = firstPass(text, o, final);
-  return { text: join_(st), hits: st.hits, unresolved: st.pending.length > 0, whole: null };
+  return { text: unmark(join_(st), opts.mark), hits: st.hits, unresolved: st.pending.length > 0, whole: null };
 }
 
 /** Hits for a finished answer without rewriting anything. */

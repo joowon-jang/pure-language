@@ -97,8 +97,16 @@ def _on_pre_llm(session_id="", user_message="", turn_id=None, **kwargs):
     key = session_id or "default"
     msg = user_message or ""
     target, allowed, skip = E.resolve_turn(_MEMO, key, msg, default=_CFG["default_language"])
+    # words the user typed anywhere in this session (gufo, product names) are theirs to use
+    seen = _MEMO.setdefault("user_words", {})
+    words = seen.setdefault(key, set())
+    if len(words) < 2000:
+        words.update(w.lower() for w in re.findall(r"[A-Za-z]{2,}", E.strip_host_notes(msg)))
+    if len(seen) > 200:
+        for k in list(seen)[:-100]:
+            seen.pop(k, None)
     st = {"skip": skip, "target": target, "allowed": allowed, "text": msg, "at": time.time(),
-          "user": {w.lower() for w in re.findall(r"[A-Za-z]{2,}", msg)},
+          "user": set(words),
           "user_cjk": set(E._CJK_RE.findall(msg)) | set(E._HANGUL_RUN.findall(msg))}
     _STATE[("turn", turn_id) if turn_id else ("session", key)] = st
     if len(_STATE) > 200:
@@ -183,12 +191,83 @@ def _on_tool_result(tool_name="", result=None, session_id="", turn_id=None, **kw
     target = st["target"]
     if target == "en" and not _OTHER_SCRIPT_RE.search(result):
         return None   # English output in an English turn needs no reminder
-    if st.pop("note_fix", False) or st.get("note_leak") and not st.get("note_told"):
+    if st.pop("note_fix", False):
         st["note_told"] = True
         rule = E.note_feedback(target)
+    elif st.get("note_leak") and not st.get("note_told"):
+        st["note_told"] = True   # earlier turns' notes, not this one
+        rule = E.note_feedback(target, earlier=True)
     else:
         rule = E.guard_for(target, frozenset({target} | E.requested_languages(st["text"])), full=False)
     return result if not rule else result.rstrip() + "\n\n" + rule
+
+
+# ------------------------------------------------- progress notes the model sees again
+_NOTE_CACHE = {}       # (target, note) -> rewritten note
+_NOTE_BATCH = 8        # most notes rewritten per request (newest first)
+
+
+def _note_slots(items):
+    """(holder, key, text) for the text of each assistant message that came with a tool call,
+    in the three request shapes: chat ``messages``, Anthropic ``messages`` (content blocks)
+    and Responses ``input`` (message item followed by a function_call item)."""
+    slots = []
+    for n, msg in enumerate(items):
+        if not isinstance(msg, dict) or msg.get("role") != "assistant":
+            continue
+        content = msg.get("content")
+        blocks = content if isinstance(content, list) else []
+        with_tool = bool(msg.get("tool_calls")) or any(
+            isinstance(b, dict) and b.get("type") in ("tool_use", "function_call") for b in blocks)
+        nxt = items[n + 1] if n + 1 < len(items) else None
+        with_tool = with_tool or (isinstance(nxt, dict) and nxt.get("type") == "function_call")
+        if not with_tool:
+            continue
+        if isinstance(content, str):
+            slots.append((msg, "content", content))
+        for b in blocks:
+            if isinstance(b, dict) and b.get("type") in ("text", "output_text") and isinstance(b.get("text"), str):
+                slots.append((b, "text", b["text"]))
+    return slots
+
+
+def _on_llm_request(request=None, session_id="", turn_id="", **kwargs):
+    """Show the model its earlier progress notes in the answer language. A note written in
+    another language stays in the context and the model keeps copying it; the stored
+    transcript is left as it was."""
+    st = _peek_state(session_id, turn_id or None)
+    if not st or st["skip"] or not isinstance(request, dict):
+        return None
+    items = request.get("messages") if isinstance(request.get("messages"), list) else request.get("input")
+    if not isinstance(items, list):
+        return None
+    target, allowed = st["target"], st["allowed"]
+    bad = [(h, k, t) for h, k, t in _note_slots(items) if t.strip() and E.note_off_language(t, target, allowed)]
+    if not bad:
+        return None
+    todo = []
+    for _, _, t in reversed(bad):
+        if (target, t) not in _NOTE_CACHE and t not in todo:
+            todo.append(t)
+        if len(todo) >= _NOTE_BATCH:
+            break
+    if todo and _CFG["rewrite"]:
+        got = _rewriter([t.replace("\n", " ") for t in todo], target, allowed, st["text"]) or []
+        for t, g in zip(todo, got):
+            if isinstance(g, str) and g.strip() and not E.note_off_language(g, target, allowed):
+                if len(_NOTE_CACHE) > 2000:
+                    _NOTE_CACHE.pop(next(iter(_NOTE_CACHE)))
+                _NOTE_CACHE[(target, t)] = g.strip()
+    changed = 0
+    for holder, key, t in bad:
+        fixed = _NOTE_CACHE.get((target, t))
+        if fixed:
+            holder[key] = fixed
+            changed += 1
+    if not changed:
+        return None
+    return {"request": request, "source": "pure-language",
+            "reason": "%d progress note(s) shown in %s" % (changed, target)}
 
 
 def _take_state(session_id, turn_id):
@@ -211,7 +290,7 @@ def _on_transform(response_text="", session_id="", turn_id=None, **kwargs):
                              allowed=st["allowed"] or frozenset({st["target"]}), user_text=st["text"],
                              rewriter=_rewriter if _CFG["rewrite"] else None,
                              max_lines=_CFG["max_lines"], context=tools,
-                             local_first=_CFG.get("local_fix") == "first")
+                             local_first=_CFG.get("local_fix") == "first", mark=bool(_CFG.get("mark")))
     except Exception:  # never lose the answer because of the cleaner
         log.warning("pure-language: cleaner failed", exc_info=True)
         return None
@@ -243,6 +322,8 @@ def register(ctx):
     if _CFG["tool_reminder"]:
         ctx.register_hook("transform_tool_result", _on_tool_result)
         ctx.register_hook("on_interim_message", _on_interim)
+        if hasattr(ctx, "register_middleware"):
+            ctx.register_middleware("llm_request", _on_llm_request)
     if _CFG["hold_stream"]:
         ctx.register_hook("transform_llm_output", _on_transform, hold_stream=True)
     else:

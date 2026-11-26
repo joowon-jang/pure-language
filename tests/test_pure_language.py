@@ -31,7 +31,7 @@ def R(session, msg):
 
 
 def c(text, target="ko", allowed=None):
-    return E.clean(text, rewrite=False, target=target, allowed=frozenset(allowed or {target}))[0]
+    return E.clean(text, rewrite=False, target=target, allowed=frozenset(allowed or {target}), mark=True)[0]
 
 
 class Korean(unittest.TestCase):
@@ -62,7 +62,9 @@ class Korean(unittest.TestCase):
         self.assertEqual(c("npm install 후 git push 하세요"), "npm install 후 git push 하세요")
 
     def test_other_script_leak(self):
-        self.assertEqual(c("면접은 обычно 두 번"), "면접은 ⚠ 두 번")
+        self.assertEqual(c("면접은 обычно 두 번"), "면접은 обычно⚠ 두 번")
+        unmarked = E.clean("면접은 обычно 두 번", rewrite=False, target="ko", allowed=frozenset({"ko"}))[0]
+        self.assertEqual(unmarked, "면접은 обычно 두 번")          # default: left as written
 
 
 class OtherTargets(unittest.TestCase):
@@ -132,10 +134,14 @@ class Hermes(unittest.TestCase):
             def register_hook(self, name, cb, **kw):
                 seen.setdefault("hooks", []).append(name)
 
+            def register_middleware(self, kind, cb):
+                seen.setdefault("middleware", []).append(kind)
+
         H.register(Ctx())
         self.assertEqual(seen["task"], "pure_language_rewrite")
         self.assertEqual(seen["hooks"], ["pre_llm_call", "post_tool_call", "transform_tool_result",
                                          "on_interim_message", "transform_llm_output"])
+        self.assertEqual(seen["middleware"], ["llm_request"])
 
     def test_progress_note_feedback(self):
         H._on_pre_llm(session_id="n", user_message="이 계정을 지워 줘", turn_id="N1")
@@ -160,8 +166,38 @@ class Hermes(unittest.TestCase):
                    {"role": "assistant", "content": "지웠습니다."}]
         guard = H._on_pre_llm(session_id="h", user_message="다음은?", turn_id="H1", conversation_history=history)
         self.assertIn("legally 검토", guard)
-        self.assertIn("방금 쓴 진행 설명이", H._on_tool_result(result="ok", session_id="h", turn_id="H1"))
+        self.assertIn("앞선 진행 설명 중", H._on_tool_result(result="ok", session_id="h", turn_id="H1"))
         self.assertIn("[출력 규칙] 진행 설명까지", H._on_tool_result(result="ok", session_id="h", turn_id="H1"))
+
+    def test_request_notes_in_answer_language(self):
+        note = "Deleting it now, then I will check the remaining folder."
+        fixed = "지금 지우고, 남은 폴더를 확인하겠습니다."
+        calls = []
+        saved = H._rewriter
+        H._rewriter = lambda lines, *a: (calls.append(list(lines)), [fixed] * len(lines))[1]
+        try:
+            H._on_pre_llm(session_id="m", user_message="이 계정 지워 줘", turn_id="M1")
+            chat = {"messages": [{"role": "user", "content": "지워 줘"},
+                                 {"role": "assistant", "content": note, "tool_calls": [{"id": "1"}]},
+                                 {"role": "tool", "content": "ok"},
+                                 {"role": "assistant", "content": "Done. The account is gone and nothing remains."}]}
+            out = H._on_llm_request(request=chat, session_id="m", turn_id="M1")
+            self.assertEqual(out["request"]["messages"][1]["content"], fixed)
+            self.assertNotEqual(out["request"]["messages"][3]["content"], fixed)   # a final answer: not a note
+            anth = {"messages": [{"role": "assistant", "content": [{"type": "text", "text": note},
+                                                                   {"type": "tool_use", "id": "1"}]}]}
+            out = H._on_llm_request(request=anth, session_id="m", turn_id="M1")
+            self.assertEqual(out["request"]["messages"][0]["content"][0]["text"], fixed)
+            resp = {"input": [{"type": "message", "role": "assistant",
+                               "content": [{"type": "output_text", "text": note}]},
+                              {"type": "function_call", "name": "x"}]}
+            out = H._on_llm_request(request=resp, session_id="m", turn_id="M1")
+            self.assertEqual(out["request"]["input"][0]["content"][0]["text"], fixed)
+            self.assertEqual(len(calls), 1)                  # cached after the first rewrite
+            korean = {"messages": [{"role": "assistant", "content": fixed, "tool_calls": [{"id": "1"}]}]}
+            self.assertIsNone(H._on_llm_request(request=korean, session_id="m", turn_id="M1"))
+        finally:
+            H._rewriter = saved
 
     def test_tool_result_reminder(self):
         H._on_pre_llm(session_id="s", user_message="작업 관리자에서 이 프로세스가 뭔지 알아봐 줘", turn_id="R1")
@@ -216,7 +252,7 @@ class TechnicalContext(unittest.TestCase):
                "권한 오류로 Access is denied. 라는 메시지가 보였습니다.\n"
                "그 페이지는 中小企業 대상이고 보통 one week 걸립니다.")
         out, hits = E.clean(ans, set(), set(), rewrite=False, target="ko", allowed={"ko"},
-                            user_text="실행해줘", context=TOOL)
+                            user_text="실행해줘", context=TOOL, mark=True)
         lines = out.split("\n")
         self.assertEqual(lines[:3], ans.split("\n")[:3])
         self.assertIn("중소기업", lines[3])            # a short word from the source is still a leak
@@ -323,7 +359,7 @@ class WovenIn(unittest.TestCase):
     JA = frozenset({"ko", "ja"})
 
     def c(self, text, allowed):
-        return E.clean(text, set(), set(), rewrite=False, target="ko", allowed=allowed)
+        return E.clean(text, set(), set(), rewrite=False, target="ko", allowed=allowed, mark=True)
 
     def test_gloss(self):
         self.assertEqual(self.c("일본의 内定(내정) 취소", self.JA)[0], "일본의 내정(`内定`) 취소")
@@ -336,7 +372,7 @@ class WovenIn(unittest.TestCase):
 
     def test_chinese_grammar_with_only_japanese_allowed(self):
         out, hits = self.c("1. **취소理由是 서면으로 요구합니다.**", self.JA)
-        self.assertNotIn("是", out)
+        self.assertIn("是⚠", out)
 
     def test_quotes_stay(self):
         line = "판례는 `始期付解約権留保付労働契約`으로 봅니다. 「お忙しいところ」 같은 표현"
@@ -387,7 +423,7 @@ class Deadline(unittest.TestCase):
         t0 = _t.time()
         out = H._on_transform(response_text="반영까지 보통 one week 정도 걸립니다.", session_id="d", turn_id="D1")
         self.assertLess(_t.time() - t0, 7)               # well under Hermes' 30 s hook limit
-        self.assertIn("one week⚠", out)                   # local fallback still visible
+        self.assertIsNone(out)                            # unfixed words are left as written
         self.assertGreater(H._BREAKER["until"], _t.time())
         H._on_pre_llm(session_id="d", user_message="또?", turn_id="D2")
         t0 = _t.time()
@@ -544,6 +580,12 @@ class NotACommand(unittest.TestCase):
         note = ("[IMPORTANT: Background process proc_1 completed normally (exit code 0).\nCommand: npm run build\n"
                 "Output:\n[… output truncated]\n   Compiling tauri v2.11.5\n    Finished release profile")
         self.assertEqual(E.resolve_turn(memo, "s", note, default="en")[0], "ko")
+
+    def test_session_words_stay_allowed(self):
+        H._on_pre_llm(session_id="g", user_message="현재 실행중인 gufo가 RAM을 왜 이렇게 많이 차지하지?", turn_id="G1")
+        H._on_transform(response_text="gufo는 정상입니다.", session_id="g", turn_id="G1")
+        H._on_pre_llm(session_id="g", user_message="꺼줘.", turn_id="G2")
+        self.assertIsNone(H._on_transform(response_text="gufo는 그대로 돌고 있습니다.", session_id="g", turn_id="G2"))
 
     def test_short_english_word_keeps_language(self):
         memo = {}

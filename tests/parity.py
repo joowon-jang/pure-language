@@ -94,7 +94,10 @@ def py_run(c):
         cjk = set(E._CJK_RE.findall(user)) | set(E._HANGUL_RUN.findall(user))
         text, hits = E.clean(c["text"], words, cjk, rewrite=False, target=c["target"],
                              allowed=frozenset(c["allowed"]), user_text=user, context=c.get("context", ""))
-        return [text, [[h[0], h[1]] for h in hits],
+        marked, _ = E.clean(c["text"], words, cjk, rewrite=False, target=c["target"],
+                            allowed=frozenset(c["allowed"]), user_text=user, context=c.get("context", ""),
+                            mark=True)
+        return [text, marked, [[h[0], h[1]] for h in hits],
                 E.wrong_language(c["text"], c["target"], frozenset(c["allowed"]))]
     if c["op"] == "rewrite":
         import re

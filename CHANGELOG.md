@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.3
+
+Unfixed leaks are left as written by default; `"mark": true` restores the ⚠ marks, now placed after the original text instead of replacing it.
+Words the user typed anywhere in the session (product and process names such as `gufo`) stay allowed in later turns, not only in the turn that used them.
+Hermes: earlier progress notes written in another language are shown to the model in the answer language (`llm_request` middleware; one bounded rewrite call per request for up to 8 notes, cached), so the model stops copying them. The stored transcript is unchanged.
+The correction for earlier turns' notes no longer claims the note just written was in the wrong language.
+
 ## 0.2.2
 
 Hermes watches each progress note (`on_interim_message`); when one comes out in another language, the next tool result carries an explicit correction instead of the plain rule. When earlier progress notes in the conversation are in the wrong language (the model copies its own habit), the turn starts with the full rule and the first tool result carries the correction.

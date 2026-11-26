@@ -530,10 +530,14 @@ def guard_for(target, allowed, full=False):
     return base
 
 
+# private-use placeholder put after a leak that stays unfixed; clean() turns it into ⚠ or drops it
+_MK = "\uE0A0"
+
+
 # ------------------------------------------------- non-Korean target scanning
 def _scan_foreign(line, target, allowed, exempt, user_text, res, final, scripts_only=False):
     """Find foreign-script leaks. Leaks are rewritten by the model (final=False)
-    or replaced with ⚠ (final=True). scripts_only: Korean target, where Hangul,
+    or marked (final=True; the original is kept, see ``clean(mark=...)``). scripts_only: Korean target, where Hangul,
     kana, Han and Latin are handled by the dedicated Korean pipeline."""
     ok_scripts = {_LANG_SCRIPT.get(l, "latin") for l in allowed} | {_LANG_SCRIPT.get(target, "latin")}
     spans = []
@@ -580,7 +584,7 @@ def _scan_foreign(line, target, allowed, exempt, user_text, res, final, scripts_
     for a, b in spans:
         if a < pos:
             continue
-        out.append(line[pos:a]); out.append("⚠"); pos = b
+        out.append(line[pos:b]); out.append(_MK); pos = b
     out.append(line[pos:])
     return "".join(out)
 
@@ -695,8 +699,8 @@ def _clean_cjk(seg, user_cjk, res, final):
                 text += reading
             else:
                 res.hits.append(("cjk-mark", piece, ctx))
-                text += "⚠"
-        if text and text[0] != "⚠" and "\uAC00" <= text[0] <= "\uD7A3":
+                text += piece + _MK
+        if text and text[0] != _MK and "\uAC00" <= text[0] <= "\uD7A3":
             prev = seg[m.start() - 1] if m.start() else ""
             if not _HANGUL_CH.match(prev):        # word start -> 두음법칙 on first syllable
                 text = _initial_rule(text[0]) + text[1:]
@@ -744,7 +748,7 @@ def _clean_latin(seg, exempt, res, final, glued_only=False):
         else:
             out, pos = [], 0
             for m in phrases:
-                out.append(seg[pos:m.end()]); out.append("⚠"); pos = m.end()
+                out.append(seg[pos:m.end()]); out.append(_MK); pos = m.end()
             out.append(seg[pos:])
             seg = "".join(out)
     out, pos = [], 0
@@ -795,7 +799,7 @@ def _clean_latin(seg, exempt, res, final, glued_only=False):
             out.append(word)
         else:
             res.hits.append(("en-mark", word, ctx))
-            out.append(word + "⚠")
+            out.append(word + _MK)
     out.append(seg[pos:])
     return "".join(out)
 
@@ -1056,13 +1060,16 @@ def _sentences(line):
 
 
 def clean(text, user_words=(), user_cjk=(), rewrite=True, target="ko", allowed=frozenset(), user_text="",
-          rewriter=None, max_lines=20, context="", local_first=False):
+          rewriter=None, max_lines=20, context="", local_first=False, mark=False):
     """Returns (cleaned_text, hits). Pure apart from the optional rewrite call.
 
     With a rewriter, every line that leaks is rewritten by the model: word tables and
     Hanja readings can read awkwardly (Japanese ``書類選考`` read as 서류선고), so they
     are only the fallback when the rewrite fails. ``local_first=True`` restores the
     old order (rules first, the model only for what they cannot fix).
+
+    ``mark``: put ⚠ after what neither the model nor the rules could fix (default: leave
+    it as written).
 
     ``context``: other material of this turn the answer may quote word for word
     (tool and command output). Terminal, log and stack-trace lines are never touched."""
@@ -1140,7 +1147,8 @@ def clean(text, user_words=(), user_cjk=(), rewrite=True, target="ko", allowed=f
             split_parts[i][j] = fixed.text
     for i, lines in split_parts.items():
         parts[i] = "\n".join(lines)
-    return "".join(parts), hits
+    # what neither the model nor the rules could fix: left as written, or flagged with ⚠
+    return "".join(parts).replace(_MK, "⚠" if mark else ""), hits
 
 
 # ------------------------------------------------------------------ logging
@@ -1238,11 +1246,28 @@ _NOTE_FEEDBACK = {
 }
 
 
-def note_feedback(target):
-    """The correction added after a progress note written in the wrong language."""
-    if target in _NOTE_FEEDBACK:
-        return _NOTE_FEEDBACK[target]
+# Said at the start of a turn whose earlier turns had progress notes in another language.
+_NOTE_FEEDBACK_EARLIER = {
+    "ko": "[출력 규칙] 이 대화의 앞선 진행 설명 중 한국어가 아닌 것이 있었다. 그것을 따라 하지 말고 "
+          "이번 진행 설명과 답변은 모두 한국어로 쓴다.",
+    "en": "[Output rule] Some earlier progress notes in this conversation were not in English. Do not copy "
+          "them; write every note and the answer of this turn in English.",
+    "ja": "[出力ルール] この会話の以前の進捗メモに日本語でないものがあった。真似せず、"
+          "今回の進捗メモと回答はすべて日本語で書く。",
+    "zh": "[输出规则] 本对话之前的进度说明有些不是中文。不要模仿，本轮的进度说明和回答全部用中文写。",
+}
+
+
+def note_feedback(target, earlier=False):
+    """The correction added after a progress note written in the wrong language
+    (``earlier``: the notes of earlier turns, said once at the start of a turn)."""
+    table = _NOTE_FEEDBACK_EARLIER if earlier else _NOTE_FEEDBACK
+    if target in table:
+        return table[target]
     name = LANG_NAMES.get(target, target)
+    if earlier:
+        return (f"[Output rule] Some earlier progress notes in this conversation were not in {name}. Do not "
+                f"copy them; write every note and the answer of this turn in {name}.")
     return (f"[Output rule] Your last progress note was not in {name}. Write every following note and the "
             f"answer in {name}, even if earlier notes in this conversation were not.")
 
