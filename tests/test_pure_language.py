@@ -276,6 +276,37 @@ class Cost(unittest.TestCase):
         self.assertEqual(E.rewrite_max_tokens(["가" * 10]), 84)
 
 
+class WovenIn(unittest.TestCase):
+    """Allowed languages may be quoted, not woven into Korean sentences."""
+    JA = frozenset({"ko", "ja"})
+
+    def c(self, text, allowed):
+        return E.clean(text, set(), set(), rewrite=False, target="ko", allowed=allowed)
+
+    def test_gloss(self):
+        self.assertEqual(self.c("일본의 内定(내정) 취소", self.JA)[0], "일본의 내정(`内定`) 취소")
+        self.assertEqual(self.c("일본의 内定(내정) 취소", frozenset({"ko"}))[0], "일본의 내정 취소")
+
+    def test_glued_run_is_a_leak_even_if_allowed(self):
+        out, hits = self.c("다릅니다. 日本の中途採用에서는 서명을 요구합니다.", self.JA)
+        self.assertNotIn("中途採用", out)
+        self.assertTrue(hits)
+
+    def test_chinese_grammar_with_only_japanese_allowed(self):
+        out, hits = self.c("1. **취소理由是 서면으로 요구합니다.**", self.JA)
+        self.assertNotIn("是", out)
+
+    def test_quotes_stay(self):
+        line = "판례는 `始期付解約権留保付労働契約`으로 봅니다. 「お忙しいところ」 같은 표현"
+        self.assertEqual(self.c(line, self.JA), (line.replace("「", '"').replace("」", '"'), []))
+
+    def test_standalone_prose_word(self):
+        out, hits = self.c(" legally 다음을 순서대로 검토할 수 있습니다.", frozenset({"ko"}))
+        self.assertIn("legally⚠", out)
+        for ok in ("msiexec 인자 오류로 실패했습니다.", "npm install 후 git push 하세요", "cron 작업이 돌았습니다"):
+            self.assertEqual(self.c(ok, frozenset({"ko"}))[0], ok)
+
+
 class CliHooks(unittest.TestCase):
     """hooks/run.py as Claude Code and Codex call it (stdin JSON -> stdout JSON)."""
 

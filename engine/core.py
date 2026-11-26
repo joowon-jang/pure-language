@@ -678,8 +678,11 @@ def _english_phrases(seg, exempt):
     return found
 
 
-def _clean_latin(seg, exempt, res, final):
-    phrases = _english_phrases(seg, exempt)
+_PROSE_SUFFIX = re.compile(r"(?:ly|tion|sion|ment|ness|ive|ful|ous|able|ible|ity|ance|ence)$")
+
+
+def _clean_latin(seg, exempt, res, final, glued_only=False):
+    phrases = [] if glued_only else _english_phrases(seg, exempt)
     if phrases:
         for m in phrases:
             res.hits.append(("en-phrase-" + ("mark" if final else "rewrite"), m.group(0),
@@ -708,8 +711,15 @@ def _clean_latin(seg, exempt, res, final):
         before = seg[m.start() - 1] if m.start() else ""
         after = seg[m.end()] if m.end() < len(seg) else ""
         glued = bool(_HANGUL_CH.match(before) or _HANGUL_CH.match(after))
+        if glued_only and not glued:
+            continue                              # English is allowed as a quote
         if not glued and low not in _LATIN_COMMON:
-            continue
+            # an uncommon lowercase word standing alone in a Korean sentence (… legally 다음을 …):
+            # only clear prose word shapes, so identifiers (cron, diff, msiexec) cost no rewrite
+            if not (word.islower() and len(word) >= 5 and _PROSE_SUFFIX.search(word)
+                    and (_HANGUL_CH.search(seg[max(0, m.start() - 12): m.start()])
+                         or _HANGUL_CH.search(seg[m.end(): m.end() + 12]))):
+                continue
         if not _HANGUL_CH.search(seg[max(0, m.start() - 40): m.end() + 40]):
             continue                              # a genuinely English passage
         ctx = seg[max(0, m.start() - 20): m.end() + 20]
@@ -787,16 +797,53 @@ def _clean_line(line, exempt, user_cjk, final=False, target="ko", allowed=frozen
     return res
 
 
+_GLOSS_RE = re.compile("([\u3040-\u30FF\u3400-\u9FFF\uF900-\uFAFF]+)\\(([\uAC00-\uD7A3][\uAC00-\uD7A3 ·]*)\\)")
+
+
+def _fix_gloss(line, quote_ok):
+    """``内定(내정)``: the Korean gloss is already there. Keep it as the word and the
+    original only as a quote when quoting is allowed: 내정(`内定`), else 내정."""
+    return _GLOSS_RE.sub((lambda m: "%s(`%s`)" % (m.group(2), m.group(1))) if quote_ok
+                         else (lambda m: m.group(2)), line)
+
+
+def _glued(text, m):
+    before = text[m.start() - 1] if m.start() else ""
+    after = text[m.end()] if m.end() < len(text) else ""
+    return bool(_HANGUL_CH.match(before) or _HANGUL_CH.match(after))
+
+
+def _masked(text, rx, pick, fn):
+    """Run ``fn`` on ``text`` with the ``rx`` matches that ``pick`` rejects hidden."""
+    keep = []
+
+    def hide(m):
+        if pick(m):
+            return m.group(0)
+        keep.append(m.group(0))
+        return chr(0xF0000 + len(keep) - 1)
+    out = fn(rx.sub(hide, text))
+    for k, piece in enumerate(keep):
+        out = out.replace(chr(0xF0000 + k), piece)
+    return out
+
+
 def _clean_line_raw(line, exempt, user_cjk, final=False, target="ko", allowed=frozenset(), user_text=""):
     res = _Line()
     if target != "ko":
         res.text = _scan_foreign(line, target, allowed, exempt, user_text, res, final)
         return res
-    t = line
+    t = _fix_gloss(line, quote_ok=bool({"ja", "zh"} & allowed))
     if not ({"ja", "zh"} & allowed):
         t = _clean_cjk(t, user_cjk, res, final)
-    if "en" not in allowed:
-        t = _clean_latin(t, exempt, res, final)
+    else:
+        # Another language may be quoted, but not woven into a Korean sentence:
+        # a run glued to Hangul (日本の中途採用에서는) or Chinese grammar when only
+        # Japanese is allowed (취소理由是) is still a leak.
+        t = _masked(t, _CJK_RE, lambda m: _glued(t, m) or ("zh" not in allowed and
+                                                            any(c in _ZH_FUNC for c in m.group(0))),
+                    lambda x: _clean_cjk(x, user_cjk, res, final))
+    t = _clean_latin(t, exempt, res, final, glued_only="en" in allowed)
     if not res.unresolved or final:
         t = _scan_foreign(t, target, allowed, exempt, user_text, res, final, scripts_only=True)
     else:
