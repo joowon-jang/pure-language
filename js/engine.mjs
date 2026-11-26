@@ -295,6 +295,11 @@ function instructionLanguage(msg) {
 
 // "왜 영어로 대답했지?", "why did you answer in English?": talk about a past reply, not a request
 const PAST_AFTER_RE = /^\s*(?:했|하였|한\s|한거|한 거|된|되었|하지\s*않|안\s*했)/;
+// Korean requests: "영어로 대답해", "영어로 답해 줘", "영어로 말하라고", "영어로 답변 부탁해", "영어로만."
+const KO_REQUEST_AFTER_RE = new RegExp(
+  "^(?:변|하)?\\s*(?:을|를|은|는|도|만|좀)?\\s*" +
+  "(?:해|하세요|하십시오|하시오|하라|해라|하자|합시다|할\\s*것|하도록|해야|하면|하기\\s*바|하길|" +
+  "줘|주세요|주십시오|주시|주라|부탁|바랍|바래|요청|[.!]?\\s*$)");
 const ASK_WHY_RE = /\b(?:why|did you|didn't you|have you|were you)\b|왜|어째서|なぜ|どうして|为什么|為什麼/i;
 
 function findCmd(patterns, msg, commandsOnly = false) {
@@ -310,6 +315,8 @@ function findCmd(patterns, msg, commandsOnly = false) {
         const b = msg.indexOf("\n", end);
         const line = msg.slice(a, b >= 0 ? b : msg.length);
         if (PAST_AFTER_RE.test(msg.slice(end)) || ASK_WHY_RE.test(line)) continue;
+        // "영어로 대답하고", "영어로 답하는": a description, not a request
+        if (pat === patterns[0] && !KO_REQUEST_AFTER_RE.test(msg.slice(end))) continue;
       }
       found.push([m.index, lang]);
     }
@@ -323,10 +330,15 @@ const GUARD_PREFIXES = [...new Set([
 ].filter((t) => t.slice(0, 40).includes("]")).map((t) => t.slice(0, t.indexOf("]") + 1)).concat(["[pure-language]"]))];
 // notices the host appends to the user's message ("[System: The skills ... changed ...]")
 const HOST_NOTE_RE = /^[ \t]*\[(?:System|SYSTEM|IMPORTANT|Note|NOTE|Context|CONTEXT)\b[\s\S]*?\][ \t]*$/gm;
+// the whole message is the host's (background job finished, nudges)
+const HOST_TURN_RE = /^\s*\[(?:System|SYSTEM|IMPORTANT)\s*:/;
+// one-line wrapper tags ("[OUT-OF-BAND USER MESSAGE — ...]", "[/OUT-OF-BAND USER MESSAGE]")
+const HOST_TAG_RE = /^[ \t]*\[\/?[A-Z][A-Z0-9_-]+(?:[ _-][A-Z0-9_-]+)+\b[^\]\n]*\][ \t]*$/gm;
 
 /** The user's own words: drop host notices and this plugin's rule lines. */
 export function stripHostNotes(msg) {
-  msg = (msg || "").replace(HOST_NOTE_RE, "");
+  if (HOST_TURN_RE.test(msg || "")) return "";
+  msg = (msg || "").replace(HOST_NOTE_RE, "").replace(HOST_TAG_RE, "");
   return strip(splitlines(msg).filter((l) => !GUARD_PREFIXES.some((p) => lstrip(l).startsWith(p))).join("\n"));
 }
 

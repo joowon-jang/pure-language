@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+Progress notes between tool calls stay in the answer language: Hermes appends the one-line rule to each tool result (`transform_tool_result`; English output in an English turn is left alone; `tool_reminder: false` turns it off).
+Language detection: Korean language commands count only as requests (`영어로 대답해`, `영어로 답해 줘`), not descriptions (`자꾸 영어로 대답하고`); the host's wrapper tags (`[OUT-OF-BAND USER MESSAGE …]`) are ignored, and a message that is only a host notice (`[IMPORTANT: Background process …]`) keeps the previous language.
+
 ## 0.2.0
 
 New hosts: OpenClaw, Pi and Oh My Pi, through a dependency-free JavaScript port of the engine (`js/engine.mjs`) that reads the same word tables as the Python engine; `tests/parity.py` keeps the two identical.

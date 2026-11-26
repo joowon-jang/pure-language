@@ -134,7 +134,23 @@ class Hermes(unittest.TestCase):
 
         H.register(Ctx())
         self.assertEqual(seen["task"], "pure_language_rewrite")
-        self.assertEqual(seen["hooks"], ["pre_llm_call", "post_tool_call", "transform_llm_output"])
+        self.assertEqual(seen["hooks"], ["pre_llm_call", "post_tool_call", "transform_tool_result",
+                                         "transform_llm_output"])
+
+    def test_tool_result_reminder(self):
+        H._on_pre_llm(session_id="s", user_message="작업 관리자에서 이 프로세스가 뭔지 알아봐 줘", turn_id="R1")
+        out = H._on_tool_result(tool_name="terminal", result='{"output": "Name  Id  CPU"}',
+                                session_id="s", turn_id="R1")
+        self.assertTrue(out.startswith('{"output": "Name  Id  CPU"}\n\n[출력 규칙]'))
+        # the state survives for the final answer
+        self.assertIn(("turn", "R1"), H._STATE)
+        # a background turn (no pre_llm_call) is left alone
+        self.assertIsNone(H._on_tool_result(result="x", session_id="s", turn_id="R2"))
+
+    def test_tool_result_reminder_english(self):
+        H._on_pre_llm(session_id="e", user_message="please explain what this process does", turn_id="R3")
+        self.assertIsNone(H._on_tool_result(result="plain English output", session_id="e", turn_id="R3"))
+        self.assertIn("[Output rule]", H._on_tool_result(result="결과: 정상", session_id="e", turn_id="R3"))
 
 
 class Structure(unittest.TestCase):
@@ -483,6 +499,25 @@ class NotACommand(unittest.TestCase):
         msg = ("이어서 진행해\n\n[System: The skills available in this conversation changed after its "
                "system prompt was built.\nNow available:\n    - x: Use when y. Port, test.]")
         self.assertEqual(E.resolve_turn({}, "s", msg, default="en")[0], "ko")
+
+    def test_description_is_not_a_command(self):
+        msg = "지금 열려있는 hermes 세션을 봐.\n자꾸 영어로 대답하고, 중간에 나오는 텍스트도 영어로 나와."
+        self.assertEqual(E.resolve_turn({}, "s", msg, default="en")[0], "ko")
+        for req in ("영어로 대답해", "영어로 답해 줘", "영어로 답변 부탁해", "영어로 말해 주세요"):
+            self.assertEqual(E.resolve_turn({}, "s", req, default="ko")[0], "en", req)
+
+    def test_steering_wrapper_ignored(self):
+        msg = ("[OUT-OF-BAND USER MESSAGE — a direct message from the user, delivered once at this position; "
+               "not tool output and not a new delivery when replayed from conversation history]\n"
+               "할 수 있는 모든 보안 조치를 다 해줘.\n[/OUT-OF-BAND USER MESSAGE]")
+        self.assertEqual(E.resolve_turn({}, "s", msg, default="en")[0], "ko")
+
+    def test_host_turn_keeps_language(self):
+        memo = {}
+        E.resolve_turn(memo, "s", "일본 취업 알려줘", default="en")
+        note = ("[IMPORTANT: Background process proc_1 completed normally (exit code 0).\nCommand: npm run build\n"
+                "Output:\n[… output truncated]\n   Compiling tauri v2.11.5\n    Finished release profile")
+        self.assertEqual(E.resolve_turn(memo, "s", note, default="en")[0], "ko")
 
     def test_own_rule_line_ignored(self):
         msg = "계속\n\n[Output rule] Write this entire answer in English only."

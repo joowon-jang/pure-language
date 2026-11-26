@@ -16,6 +16,8 @@ DEFAULTS = {
                                 #   for a correction (an extra turn); a wrong-language reply always does
     "local_fix": "fallback",    # "fallback": the model rewrites every leaking line, word tables and
                                 #   Hanja readings only when it cannot; "first": rules first (cheaper)
+    "tool_reminder": True,      # Hermes: add the one-line rule after each tool result, where progress
+                                #   notes start drifting into the tool output's language
     "log": False,               # write hit snippets (not whole answers) to a local log file
 }
 

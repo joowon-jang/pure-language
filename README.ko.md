@@ -18,7 +18,7 @@
 
 `일본어로 메일 초안 써줘`처럼 일부만 외국어인 요청은 답변 언어를 그대로 두고 그 언어를 허용합니다. 54개 언어, 22가지 문자를 알아봅니다.
 
-언어 지정은 요청일 때만 명령으로 봅니다. `왜 영어로 대답했지?`처럼 지난 답변을 묻는 말은 언어를 바꾸지 않습니다. 도구가 메시지 끝에 덧붙이는 안내문(`[System: ...]`)과 이 플러그인이 넣은 규칙 줄도 언어 판단에서 뺍니다.
+언어 지정은 요청일 때만 명령으로 봅니다. `영어로 대답해`, `영어로 답해 줘`는 명령이지만, `왜 영어로 대답했지?`, `자꾸 영어로 대답하고`처럼 지난 답변을 묻거나 설명하는 말은 언어를 바꾸지 않습니다. 도구가 메시지에 덧붙이는 안내문(`[System: ...]`, `[OUT-OF-BAND USER MESSAGE …]`)과 이 플러그인이 넣은 규칙 줄도 언어 판단에서 빼고, 백그라운드 작업 완료 알림처럼 도구가 보낸 메시지는 직전 언어를 유지합니다.
 
 ## 지시문 문구
 
@@ -90,6 +90,8 @@ openclaw config set plugins.entries.pure-language.hooks.allowConversationAccess 
 | 오 마이 파이 | `~/.omp/agent/pure-language.json` |
 | 파이 | `~/.pi/agent/pure-language.json` |
 | 오픈클로 | `openclaw.json`의 `plugins.entries.pure-language.config`, 또는 `~/.openclaw/pure-language.json` |
+
+헤르메스에서는 도구 결과가 돌아올 때마다 끝에 답변 언어 규칙 한 줄을 덧붙입니다. 영어 출력을 읽은 직후 쓰는 진행 설명이 영어로 바뀌는 것을 막기 위해서입니다. 끄려면 `"tool_reminder": false`로 둡니다.
 
 한국어 사용자라면 아래처럼 두는 것을 권합니다.
 

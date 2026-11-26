@@ -35,10 +35,12 @@ Kazakh, Mongolian, Greek, Arabic, Persian, Urdu, Hebrew, Hindi, Marathi,
 Nepali, Bengali, Punjabi, Gujarati, Tamil, Telugu, Kannada, Malayalam,
 Sinhala, Thai, Lao, Burmese, Khmer, Georgian, Armenian, Amharic, Tibetan.
 
-Only requests count as commands: `왜 영어로 대답했지?` or `why did you answer in
-English?` talks about an earlier reply and does not switch the language.
-Notices the host appends to your message (`[System: ...]`) and the plugin's own
-rule line are ignored when detecting the language.
+Only requests count as commands: `영어로 대답해` switches, while `왜 영어로
+대답했지?`, `자꾸 영어로 대답하고` or `why did you answer in English?` talk about
+earlier replies and do not. Notices and wrapper tags the host adds to your
+message (`[System: ...]`, `[OUT-OF-BAND USER MESSAGE …]`) and the plugin's own
+rule line are ignored; a message that is only a host notice (a background job
+finished) keeps the previous language.
 
 ## What counts as a leak
 
@@ -213,6 +215,7 @@ Optional JSON file; every key is optional.
 | `max_lines` | `20` | Hermes: most lines sent in one rewrite call |
 | `stop_action` | `rewrite` | Claude Code / Codex: `rewrite` asks for a short correction, `off` only injects the guard |
 | `stop_min_hits` | `1` | Claude Code / Codex / OpenClaw / Pi: distinct leaked words needed before asking the model for a correction (an extra turn). Raise it to save cost; fewer only tighten the rule for the next turn. A reply in the wrong language always triggers it |
+| `tool_reminder` | `true` | Hermes: add the one-line rule after each tool result, so progress notes written after reading (usually English) tool output stay in the answer language. English output in an English turn is left alone |
 | `local_fix` | `fallback` | `fallback`: the model rewrites every leaking line, word tables and Hanja readings only when it cannot. `first`: rules first, the model only for what they cannot fix (cheaper, can read awkwardly) |
 | `rewrite_model` | (empty) | Oh My Pi / Pi: model for rewrites as `provider/id` (default: Oh My Pi's `@smol` role, then the session model). OpenClaw: model ref for `api.runtime.llm.complete`; choosing one needs `plugins.entries.pure-language.llm.allowModelOverride: true` |
 | `log` | `false` | Write leak snippets (about 20 characters around each hit, never whole answers) to a local log |
@@ -253,6 +256,9 @@ The plugin is built to add as few tokens as possible:
   back to an isolated run through the agent's runtime), and one more model pass
   for a leaking draft. Claude Code / Codex: a leaky answer triggers one short
   follow-up turn. Clean answers cost nothing extra.
+* **Prompt additions.** A one-line rule is added to your message each turn, and
+  in Hermes also to the end of each tool result (about 40–100 characters;
+  `tool_reminder: false` turns the latter off).
 * **Network.** None of its own. The only network use is the model call above,
   made by the host with the host's own credentials. The plugin never reads
   credential files.

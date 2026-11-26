@@ -124,6 +124,33 @@ def _on_post_tool(tool_name="", result=None, session_id="", turn_id=None, **kwar
     return None
 
 
+def _peek_state(session_id, turn_id):
+    if turn_id and ("turn", turn_id) in _STATE:
+        return _STATE[("turn", turn_id)]
+    st = _STATE.get(("session", session_id or "default"))
+    return st if st is not None and time.time() - st["at"] < 1800 else None
+
+
+_OTHER_SCRIPT_RE = re.compile(r"[^\x00-\u024F\u1E00-\u1EFF\u2000-\u2BFF\uFE00-\uFE0F\uFF00-\uFFEF]")
+
+
+def _on_tool_result(tool_name="", result=None, session_id="", turn_id=None, **kwargs):
+    """Remind the model of the answer language right after each tool result.
+
+    Progress notes between tool calls are written right after the model reads tool output
+    (usually English), which is when it drifts; the turn's guard sits far above by then."""
+    if not isinstance(result, str) or not result.strip():
+        return None
+    st = _peek_state(session_id, turn_id)
+    if not st or st["skip"]:
+        return None
+    target = st["target"]
+    if target == "en" and not _OTHER_SCRIPT_RE.search(result):
+        return None   # English output in an English turn needs no reminder
+    rule = E.guard_for(target, frozenset({target} | E.requested_languages(st["text"])), full=False)
+    return result if not rule else result.rstrip() + "\n\n" + rule
+
+
 def _take_state(session_id, turn_id):
     """Only the turn that ran pre_llm_call is cleaned. Background agents sharing the
     session (memory/skill review forks, compression) fire no pre_llm_call for their
@@ -173,6 +200,8 @@ def register(ctx):
         log.info("pure-language: auxiliary task not registered: %s", exc)
     ctx.register_hook("pre_llm_call", _on_pre_llm)
     ctx.register_hook("post_tool_call", _on_post_tool)
+    if _CFG["tool_reminder"]:
+        ctx.register_hook("transform_tool_result", _on_tool_result)
     if _CFG["hold_stream"]:
         ctx.register_hook("transform_llm_output", _on_transform, hold_stream=True)
     else:

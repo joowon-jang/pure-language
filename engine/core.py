@@ -410,6 +410,11 @@ def _instruction_language(msg):
 
 # "왜 영어로 대답했지?", "why did you answer in English?": talk about a past reply, not a request
 _PAST_AFTER_RE = re.compile(r"\s*(?:했|하였|한\s|한거|한 거|된|되었|하지\s*않|안\s*했)")
+# Korean requests: "영어로 대답해", "영어로 답해 줘", "영어로 말하라고", "영어로 답변 부탁해", "영어로만."
+_KO_REQUEST_AFTER_RE = re.compile(
+    r"(?:변|하)?\s*(?:을|를|은|는|도|만|좀)?\s*"
+    r"(?:해|하세요|하십시오|하시오|하라|해라|하자|합시다|할\s*것|하도록|해야|하면|하기\s*바|하길|"
+    r"줘|주세요|주십시오|주시|주라|부탁|바랍|바래|요청|[.!]?\s*$)")
 _ASK_WHY_RE = re.compile(r"\b(?:why|did you|didn't you|have you|were you)\b|왜|어째서|なぜ|どうして|为什么|為什麼", re.I)
 
 
@@ -427,6 +432,8 @@ def _find_cmd(patterns, msg, commands_only=False):
                 line = msg[a: b if b >= 0 else len(msg)]
                 if _PAST_AFTER_RE.match(msg, m.end()) or _ASK_WHY_RE.search(line):
                     continue
+                if pat is patterns[0] and not _KO_REQUEST_AFTER_RE.match(msg, m.end()):
+                    continue   # "영어로 대답하고", "영어로 답하는": a description, not a request
             found.append((m.start(), lang))
     return [l for _, l in sorted(found)]
 
@@ -438,11 +445,16 @@ def _guard_prefixes():
 
 # notices the host appends to the user's message ("[System: The skills ... changed ...]")
 _HOST_NOTE_RE = re.compile(r"^[ \t]*\[(?:System|SYSTEM|IMPORTANT|Note|NOTE|Context|CONTEXT)\b.*?\][ \t]*$", re.S | re.M)
+_HOST_TURN_RE = re.compile(r"\s*\[(?:System|SYSTEM|IMPORTANT)\s*:")
+# one-line wrapper tags ("[OUT-OF-BAND USER MESSAGE — ...]", "[/OUT-OF-BAND USER MESSAGE]")
+_HOST_TAG_RE = re.compile(r"^[ \t]*\[/?[A-Z][A-Z0-9_-]+(?:[ _-][A-Z0-9_-]+)+\b[^\]\n]*\][ \t]*$", re.M)
 
 
 def strip_host_notes(msg):
     """The user's own words: drop host notices and this plugin's rule lines."""
-    msg = _HOST_NOTE_RE.sub("", msg or "")
+    if _HOST_TURN_RE.match(msg or ""):
+        return ""   # the whole message is the host's (background job finished, nudges)
+    msg = _HOST_TAG_RE.sub("", _HOST_NOTE_RE.sub("", msg or ""))
     prefixes = _guard_prefixes()
     return "\n".join(l for l in msg.splitlines() if not l.lstrip().startswith(prefixes)).strip()
 
