@@ -169,13 +169,13 @@ pi install git:github.com/joowon-jang/pure-language
 ### OpenClaw
 
 ```bash
-openclaw plugins install git:github.com/joowon-jang/pure-language --accept-capabilities
-openclaw plugins enable pure-language
+openclaw plugins install git:github.com/joowon-jang/pure-language --force --accept-capabilities
 openclaw config set plugins.entries.pure-language.hooks.allowConversationAccess true
 ```
 
-The plugin declares conversation read access; OpenClaw asks you to accept it
-and to allow conversation hooks for non-bundled plugins.
+`--force` confirms a source outside ClawHub; the plugin is enabled on install.
+It declares conversation read access, and OpenClaw needs the last setting to
+run conversation hooks for plugins it does not bundle. Restart the Gateway.
 
 ## Settings
 

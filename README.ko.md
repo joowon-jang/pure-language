@@ -66,8 +66,7 @@ omp config set extensionRenderers.assistantText true
 pi install git:github.com/joowon-jang/pure-language
 
 # 오픈클로
-openclaw plugins install git:github.com/joowon-jang/pure-language --accept-capabilities
-openclaw plugins enable pure-language
+openclaw plugins install git:github.com/joowon-jang/pure-language --force --accept-capabilities
 openclaw config set plugins.entries.pure-language.hooks.allowConversationAccess true
 ```
 
