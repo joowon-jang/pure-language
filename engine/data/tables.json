@@ -1,0 +1,1395 @@
+{
+ "GUARD": "[출력 규칙] 진행 설명까지 모두 한국어로 쓴다. 외국어 용어는 반드시 한국어로 옮겨 쓴다. 원문이 꼭 필요하면 처음 한 번만 한국어 뒤 괄호 안 백틱으로 덧붙인다. 예: 내정 취소(`内定取消し`). 원문을 한국어 대신 쓰거나, 한국어 문장에 외국어 단어를 붙여 쓰지 않는다(`日本の採用에서는`, `legally 검토`처럼 쓰지 않는다). 외국어 자료를 읽었거나 붙여넣은 출력이 외국어여도 답변 언어는 바꾸지 않는다. 코드, 명령, 경로, 고유명사, 약어는 그대로 둔다.",
+ "ZH_FUNC": "不与个么也了些从他们你俺吗吧呀呢和咱哪啊啥嘛在地她它对就很得您我把是没的着给被让过还这那都",
+ "PUNCT_MAP": {
+  "、": ", ",
+  "。": ". ",
+  "「": "\"",
+  "」": "\"",
+  "『": "\"",
+  "』": "\"",
+  "〈": "<",
+  "〉": ">",
+  "【": "[",
+  "】": "]",
+  "・": "·",
+  "々": "",
+  "！": "!",
+  "？": "?",
+  "：": ":",
+  "；": ";",
+  "，": ",",
+  "（": "(",
+  "）": ")",
+  "％": "%",
+  "＃": "#",
+  "＄": "$",
+  "＊": "*",
+  "－": "-",
+  "／": "/",
+  "＼": "\\",
+  "＾": "^",
+  "｀": "`",
+  "｛": "{",
+  "｝": "}",
+  "～": "~",
+  "〜": "~"
+ },
+ "WORDS": {
+  "中小企业": "중소기업",
+  "中小企業": "중소기업",
+  "企業": "기업",
+  "比价": "비교",
+  "比價": "비교",
+  "会社": "회사",
+  "内定": "내정",
+  "先日": "전날",
+  "検讨": "검토",
+  "检讨": "검토",
+  "検討": "검토",
+  "面接": "면접",
+  "面談": "면담",
+  "面谈": "면담",
+  "待遇": "대우",
+  "提示": "제시",
+  "条件": "조건",
+  "連絡": "연락",
+  "联络": "연락",
+  "確認": "확인",
+  "确认": "확인",
+  "返信": "회신",
+  "回复": "회신",
+  "答复": "답변",
+  "回答": "답변",
+  "入社": "입사",
+  "入职": "입사",
+  "退社": "퇴사",
+  "离职": "퇴사",
+  "退职": "퇴직",
+  "辞职": "사직",
+  "代表": "대표",
+  "会计": "회계",
+  "会計": "회계",
+  "経理": "회계",
+  "人事": "인사",
+  "经验": "경험",
+  "經驗": "경험",
+  "实绩": "실적",
+  "実績": "실적",
+  "实际": "실제",
+  "実際": "실제",
+  "手续": "수속",
+  "手続": "절차",
+  "决定": "결정",
+  "协定": "합의",
+  "协商": "협의",
+  "協商": "협의",
+  "谈判": "협상",
+  "談判": "협상",
+  "要求": "요구",
+  "说明": "설명",
+  "説明": "설명",
+  "明确": "명확히",
+  "明確": "명확히",
+  "印象": "인상",
+  "意思": "의사",
+  "现在": "현재",
+  "現在": "현재",
+  "时间": "시간",
+  "時間": "시간",
+  "一般": "일반",
+  "通常": "통상",
+  "可能": "가능",
+  "有效": "유효",
+  "问题": "문제",
+  "問題": "문제",
+  "日本": "일본",
+  "韩国": "한국",
+  "韓國": "한국",
+  "薪资": "급여",
+  "工資": "급여",
+  "薪酬": "보수",
+  "基本": "기본",
+  "正当": "정당",
+  "混入": "혼입",
+  "幅": "폭",
+  "尽早": "조속히",
+  "最常见的": "가장 흔한",
+  "特有": "특유",
+  "試用期間": "수습 기간",
+  "试用期": "수습 기간",
+  "賞与": "상여",
+  "奖金": "상여",
+  "残業": "잔업",
+  "加班": "초과 근무",
+  "履歴書": "이력서",
+  "職務経歴書": "경력 기술서",
+  "求人票": "구인 공고",
+  "書類選考": "서류 전형",
+  "内定通知書": "내정 통지서",
+  "内定取消": "내정 취소",
+  "内定辞退": "내정 사퇴",
+  "健康診断書": "건강 진단서",
+  "経験": "경험",
+  "給与": "급여",
+  "年収": "연봉",
+  "相談": "상담",
+  "交渉": "협상",
+  "調整": "조정",
+  "期間": "기간",
+  "契約": "계약",
+  "労働": "노동",
+  "雇用": "고용",
+  "採用": "채용",
+  "中途": "경력",
+  "新卒": "신입",
+  "一般的": "일반적",
+  "様": "님"
+ },
+ "LATIN_ALLOW": [
+  "agy",
+  "android",
+  "api",
+  "app",
+  "aws",
+  "azure",
+  "bios",
+  "bun",
+  "chrome",
+  "cli",
+  "cm",
+  "cpu",
+  "css",
+  "csv",
+  "db",
+  "deno",
+  "discord",
+  "dll",
+  "dns",
+  "docker",
+  "dodo",
+  "eslint",
+  "exe",
+  "gb",
+  "gcp",
+  "git",
+  "github",
+  "gitlab",
+  "gmail",
+  "gpu",
+  "gui",
+  "hermes",
+  "html",
+  "http",
+  "https",
+  "id",
+  "ios",
+  "ip",
+  "js",
+  "json",
+  "jsx",
+  "jwt",
+  "kb",
+  "kg",
+  "km",
+  "kubernetes",
+  "linux",
+  "macos",
+  "mb",
+  "md",
+  "mm",
+  "ms",
+  "nextjs",
+  "node",
+  "npm",
+  "npx",
+  "oauth",
+  "ok",
+  "orca",
+  "os",
+  "pc",
+  "pdf",
+  "pip",
+  "pnpm",
+  "px",
+  "py",
+  "python",
+  "ram",
+  "react",
+  "scss",
+  "sdk",
+  "slack",
+  "sql",
+  "ssd",
+  "ssh",
+  "ssl",
+  "svelte",
+  "tls",
+  "toml",
+  "ts",
+  "tsx",
+  "ui",
+  "uri",
+  "url",
+  "usb",
+  "uv",
+  "ux",
+  "vite",
+  "vs",
+  "vscode",
+  "vue",
+  "web",
+  "webpack",
+  "windows",
+  "xml",
+  "yaml",
+  "yarn"
+ ],
+ "PROPER_COLLIDE": [
+  "amazon",
+  "apple",
+  "edge",
+  "excel",
+  "express",
+  "figma",
+  "flutter",
+  "go",
+  "jira",
+  "line",
+  "next",
+  "notion",
+  "office",
+  "opera",
+  "ruby",
+  "rust",
+  "safari",
+  "spring",
+  "swift",
+  "target",
+  "teams",
+  "unity",
+  "visa",
+  "word",
+  "zoom"
+ ],
+ "LATIN_WORDS": {
+  "weight": "비중",
+  "gave": "줬",
+  "give": "주",
+  "log": "기록",
+  "logs": "기록",
+  "check": "확인",
+  "update": "갱신",
+  "issue": "문제",
+  "point": "요점",
+  "focus": "초점",
+  "risk": "위험",
+  "case": "경우",
+  "level": "수준",
+  "range": "범위",
+  "base": "기준",
+  "target": "목표",
+  "option": "선택지",
+  "timing": "시점",
+  "deadline": "기한",
+  "schedule": "일정",
+  "process": "절차",
+  "step": "단계",
+  "detail": "세부",
+  "details": "세부 사항",
+  "result": "결과",
+  "impact": "영향",
+  "value": "가치",
+  "salary": "연봉",
+  "bonus": "상여",
+  "offer": "제안",
+  "negotiation": "협상",
+  "signal": "신호",
+  "tip": "요령",
+  "however": "다만",
+  "because": "때문에",
+  "actually": "실제로",
+  "basically": "기본적으로",
+  "maybe": "아마",
+  "really": "정말",
+  "very": "매우",
+  "also": "또한",
+  "just": "그냥",
+  "only": "오직",
+  "first": "먼저",
+  "then": "그다음",
+  "next": "다음",
+  "finally": "마지막으로",
+  "good": "좋은",
+  "bad": "나쁜",
+  "important": "중요한",
+  "simple": "단순한",
+  "safe": "안전한",
+  "fast": "빠른",
+  "slow": "느린",
+  "easy": "쉬운",
+  "coming": "도착",
+  "pending": "대기 중",
+  "done": "완료",
+  "fix": "수정"
+ },
+ "LATIN_VERB_STEMS": [
+  "fix",
+  "gave",
+  "give"
+ ],
+ "LATIN_COMMON": [
+  "a",
+  "about",
+  "actually",
+  "after",
+  "again",
+  "all",
+  "already",
+  "also",
+  "always",
+  "an",
+  "and",
+  "any",
+  "are",
+  "as",
+  "at",
+  "bad",
+  "base",
+  "basically",
+  "be",
+  "because",
+  "been",
+  "before",
+  "big",
+  "bonus",
+  "boss",
+  "but",
+  "by",
+  "can",
+  "case",
+  "check",
+  "coming",
+  "company",
+  "could",
+  "deadline",
+  "detail",
+  "details",
+  "did",
+  "do",
+  "does",
+  "done",
+  "each",
+  "easy",
+  "even",
+  "every",
+  "fast",
+  "few",
+  "finally",
+  "first",
+  "fix",
+  "focus",
+  "for",
+  "from",
+  "gave",
+  "get",
+  "give",
+  "go",
+  "good",
+  "got",
+  "had",
+  "has",
+  "have",
+  "he",
+  "her",
+  "here",
+  "high",
+  "his",
+  "how",
+  "however",
+  "if",
+  "impact",
+  "important",
+  "in",
+  "into",
+  "is",
+  "issue",
+  "it",
+  "its",
+  "job",
+  "just",
+  "know",
+  "later",
+  "less",
+  "level",
+  "likely",
+  "log",
+  "logs",
+  "long",
+  "low",
+  "made",
+  "make",
+  "many",
+  "may",
+  "maybe",
+  "me",
+  "might",
+  "money",
+  "more",
+  "most",
+  "much",
+  "must",
+  "my",
+  "need",
+  "negotiation",
+  "never",
+  "new",
+  "next",
+  "no",
+  "not",
+  "now",
+  "of",
+  "offer",
+  "often",
+  "old",
+  "on",
+  "only",
+  "option",
+  "or",
+  "other",
+  "our",
+  "over",
+  "own",
+  "pay",
+  "pending",
+  "people",
+  "point",
+  "probably",
+  "process",
+  "range",
+  "really",
+  "result",
+  "right",
+  "risk",
+  "safe",
+  "salary",
+  "same",
+  "schedule",
+  "see",
+  "she",
+  "short",
+  "should",
+  "signal",
+  "simple",
+  "slow",
+  "small",
+  "so",
+  "some",
+  "soon",
+  "step",
+  "still",
+  "such",
+  "sure",
+  "take",
+  "target",
+  "team",
+  "than",
+  "that",
+  "the",
+  "them",
+  "then",
+  "there",
+  "these",
+  "they",
+  "thing",
+  "things",
+  "think",
+  "this",
+  "those",
+  "time",
+  "timing",
+  "tip",
+  "to",
+  "under",
+  "update",
+  "use",
+  "used",
+  "usually",
+  "value",
+  "very",
+  "want",
+  "was",
+  "way",
+  "we",
+  "weight",
+  "well",
+  "went",
+  "were",
+  "what",
+  "when",
+  "which",
+  "while",
+  "who",
+  "why",
+  "will",
+  "with",
+  "work",
+  "would",
+  "wrong",
+  "yes",
+  "you",
+  "your"
+ ],
+ "PAIR": {
+  "이": [
+   "이",
+   "가"
+  ],
+  "가": [
+   "이",
+   "가"
+  ],
+  "은": [
+   "은",
+   "는"
+  ],
+  "는": [
+   "은",
+   "는"
+  ],
+  "을": [
+   "을",
+   "를"
+  ],
+  "를": [
+   "을",
+   "를"
+  ],
+  "과": [
+   "과",
+   "와"
+  ],
+  "와": [
+   "과",
+   "와"
+  ],
+  "으로": [
+   "으로",
+   "로"
+  ],
+  "로": [
+   "으로",
+   "로"
+  ],
+  "이랑": [
+   "이랑",
+   "랑"
+  ],
+  "랑": [
+   "이랑",
+   "랑"
+  ]
+ },
+ "LANGS": {
+  "ko": [
+   "Korean",
+   "한국어",
+   [
+    "한국어",
+    "한글",
+    "우리말",
+    "韓国語",
+    "韩语",
+    "韓語",
+    "韩文"
+   ],
+   "hangul",
+   ""
+  ],
+  "ja": [
+   "Japanese",
+   "일본어",
+   [
+    "일어",
+    "日本語",
+    "日语",
+    "日語",
+    "日文"
+   ],
+   "ja",
+   ""
+  ],
+  "zh": [
+   "Chinese",
+   "중국어",
+   [
+    "중문",
+    "中国語",
+    "中文",
+    "汉语",
+    "漢語",
+    "华语",
+    "普通话"
+   ],
+   "han",
+   ""
+  ],
+  "en": [
+   "English",
+   "영어",
+   [
+    "영문",
+    "英語",
+    "英语",
+    "英文"
+   ],
+   "latin",
+   "the and is are you what how why can please this that with for does my of it be would should have which"
+  ],
+  "es": [
+   "Spanish",
+   "스페인어",
+   [
+    "Español",
+    "Castellano",
+    "スペイン語",
+    "西班牙语"
+   ],
+   "latin",
+   "el la los las que de y es por para cómo qué una un del se no con está son pero muy"
+  ],
+  "fr": [
+   "French",
+   "프랑스어",
+   [
+    "불어",
+    "Français",
+    "フランス語",
+    "法语"
+   ],
+   "latin",
+   "le la les est et que pour une des comment pourquoi je vous nous pas avec dans sur ce sont"
+  ],
+  "de": [
+   "German",
+   "독일어",
+   [
+    "Deutsch",
+    "ドイツ語",
+    "德语"
+   ],
+   "latin",
+   "der die das und ist nicht wie warum ich ein eine mit auf für sie es den dem sind auch"
+  ],
+  "pt": [
+   "Portuguese",
+   "포르투갈어",
+   [
+    "Português",
+    "ポルトガル語",
+    "葡萄牙语"
+   ],
+   "latin",
+   "o os as que não como por uma é você para com do da em um são mas muito"
+  ],
+  "it": [
+   "Italian",
+   "이탈리아어",
+   [
+    "Italiano",
+    "イタリア語",
+    "意大利语"
+   ],
+   "latin",
+   "il lo la gli le che di è per come perché una non con sono del della anche questo"
+  ],
+  "nl": [
+   "Dutch",
+   "네덜란드어",
+   [
+    "Nederlands",
+    "オランダ語",
+    "荷兰语"
+   ],
+   "latin",
+   "de het een en is van dat niet hoe waarom ik je met voor zijn op ook wat"
+  ],
+  "sv": [
+   "Swedish",
+   "스웨덴어",
+   [
+    "Svenska",
+    "スウェーデン語",
+    "瑞典语"
+   ],
+   "latin",
+   "och är att det som en på jag inte med för hur varför vad har den"
+  ],
+  "da": [
+   "Danish",
+   "덴마크어",
+   [
+    "Dansk",
+    "デンマーク語",
+    "丹麦语"
+   ],
+   "latin",
+   "og er at det som en på jeg ikke med for hvordan hvorfor hvad har den"
+  ],
+  "no": [
+   "Norwegian",
+   "노르웨이어",
+   [
+    "Norsk",
+    "ノルウェー語",
+    "挪威语"
+   ],
+   "latin",
+   "og er at det som en på jeg ikke med for hvordan hvorfor hva har den"
+  ],
+  "fi": [
+   "Finnish",
+   "핀란드어",
+   [
+    "Suomi",
+    "フィンランド語",
+    "芬兰语"
+   ],
+   "latin",
+   "ja on ei että se mitä miten miksi minä sinä olen kanssa tämä mutta"
+  ],
+  "pl": [
+   "Polish",
+   "폴란드어",
+   [
+    "Polski",
+    "ポーランド語",
+    "波兰语"
+   ],
+   "latin",
+   "i w nie się na jest że to jak dlaczego z do co ale czy dla"
+  ],
+  "cs": [
+   "Czech",
+   "체코어",
+   [
+    "Čeština",
+    "チェコ語",
+    "捷克语"
+   ],
+   "latin",
+   "a je v se na že to jak proč s do co ale není jsem pro"
+  ],
+  "ro": [
+   "Romanian",
+   "루마니아어",
+   [
+    "Română",
+    "ルーマニア語",
+    "罗马尼亚语"
+   ],
+   "latin",
+   "și este în nu că pe cu la ce cum de ce pentru sunt dar"
+  ],
+  "hu": [
+   "Hungarian",
+   "헝가리어",
+   [
+    "Magyar",
+    "ハンガリー語",
+    "匈牙利语"
+   ],
+   "latin",
+   "és a az hogy nem egy van is mit miért hogyan meg de ez"
+  ],
+  "tr": [
+   "Turkish",
+   "터키어",
+   [
+    "튀르키예어",
+    "Türkçe",
+    "トルコ語",
+    "土耳其语"
+   ],
+   "latin",
+   "ve bir bu da de ne için nasıl neden ben sen değil ile çok mi mı"
+  ],
+  "id": [
+   "Indonesian",
+   "인도네시아어",
+   [
+    "Bahasa Indonesia",
+    "インドネシア語",
+    "印尼语"
+   ],
+   "latin",
+   "dan yang di ini itu tidak dengan untuk apa bagaimana mengapa saya anda adalah ada"
+  ],
+  "ms": [
+   "Malay",
+   "말레이어",
+   [
+    "Bahasa Melayu",
+    "マレー語",
+    "马来语"
+   ],
+   "latin",
+   "dan yang di ini itu tidak dengan untuk apa bagaimana kenapa saya awak adalah ialah"
+  ],
+  "tl": [
+   "Filipino",
+   "필리핀어",
+   [
+    "타갈로그어",
+    "Tagalog",
+    "フィリピン語",
+    "菲律宾语"
+   ],
+   "latin",
+   "ang ng sa mga at ay na hindi ko ka ito paano bakit ano"
+  ],
+  "vi": [
+   "Vietnamese",
+   "베트남어",
+   [
+    "Tiếng Việt",
+    "ベトナム語",
+    "越南语"
+   ],
+   "latin",
+   "và là của có không được cho này một những tôi bạn như thế nào tại sao"
+  ],
+  "sw": [
+   "Swahili",
+   "스와힐리어",
+   [
+    "Kiswahili",
+    "スワヒリ語",
+    "斯瓦希里语"
+   ],
+   "latin",
+   "na ya wa ni kwa za la katika hii hiyo jinsi kwa nini mimi wewe"
+  ],
+  "ru": [
+   "Russian",
+   "러시아어",
+   [
+    "Русский",
+    "ロシア語",
+    "俄语"
+   ],
+   "cyrillic",
+   "и в не на что как почему я ты это с по для но он она"
+  ],
+  "uk": [
+   "Ukrainian",
+   "우크라이나어",
+   [
+    "Українська",
+    "ウクライナ語",
+    "乌克兰语"
+   ],
+   "cyrillic",
+   "і в не на що як чому я ти це з по для але він вона"
+  ],
+  "bg": [
+   "Bulgarian",
+   "불가리아어",
+   [
+    "Български",
+    "ブルガリア語",
+    "保加利亚语"
+   ],
+   "cyrillic",
+   "и в не на че как защо аз ти това с по за но той тя е"
+  ],
+  "sr": [
+   "Serbian",
+   "세르비아어",
+   [
+    "Српски",
+    "セルビア語",
+    "塞尔维亚语"
+   ],
+   "cyrillic",
+   "и у не на да како зашто ја ти ово са по за али он она је"
+  ],
+  "kk": [
+   "Kazakh",
+   "카자흐어",
+   [
+    "Қазақша",
+    "カザフ語",
+    "哈萨克语"
+   ],
+   "cyrillic",
+   "және бұл мен сен не қалай неге үшін бар емес"
+  ],
+  "mn": [
+   "Mongolian",
+   "몽골어",
+   [
+    "Монгол",
+    "モンゴル語",
+    "蒙古语"
+   ],
+   "cyrillic",
+   "ба бол энэ тэр би чи юу яаж яагаад байна биш"
+  ],
+  "el": [
+   "Greek",
+   "그리스어",
+   [
+    "Ελληνικά",
+    "ギリシャ語",
+    "希腊语"
+   ],
+   "greek",
+   ""
+  ],
+  "ar": [
+   "Arabic",
+   "아랍어",
+   [
+    "العربية",
+    "アラビア語",
+    "阿拉伯语"
+   ],
+   "arabic",
+   ""
+  ],
+  "fa": [
+   "Persian",
+   "페르시아어",
+   [
+    "فارسی",
+    "ペルシア語",
+    "波斯语"
+   ],
+   "arabic",
+   ""
+  ],
+  "ur": [
+   "Urdu",
+   "우르두어",
+   [
+    "اردو",
+    "ウルドゥー語",
+    "乌尔都语"
+   ],
+   "arabic",
+   ""
+  ],
+  "he": [
+   "Hebrew",
+   "히브리어",
+   [
+    "עברית",
+    "ヘブライ語",
+    "希伯来语"
+   ],
+   "hebrew",
+   ""
+  ],
+  "hi": [
+   "Hindi",
+   "힌디어",
+   [
+    "हिन्दी",
+    "हिंदी",
+    "ヒンディー語",
+    "印地语"
+   ],
+   "devanagari",
+   ""
+  ],
+  "mr": [
+   "Marathi",
+   "마라티어",
+   [
+    "मराठी"
+   ],
+   "devanagari",
+   ""
+  ],
+  "ne": [
+   "Nepali",
+   "네팔어",
+   [
+    "नेपाली"
+   ],
+   "devanagari",
+   ""
+  ],
+  "bn": [
+   "Bengali",
+   "벵골어",
+   [
+    "বাংলা",
+    "ベンガル語",
+    "孟加拉语"
+   ],
+   "bengali",
+   ""
+  ],
+  "pa": [
+   "Punjabi",
+   "펀자브어",
+   [
+    "ਪੰਜਾਬੀ"
+   ],
+   "gurmukhi",
+   ""
+  ],
+  "gu": [
+   "Gujarati",
+   "구자라트어",
+   [
+    "ગુજરાતી"
+   ],
+   "gujarati",
+   ""
+  ],
+  "ta": [
+   "Tamil",
+   "타밀어",
+   [
+    "தமிழ்",
+    "タミル語",
+    "泰米尔语"
+   ],
+   "tamil",
+   ""
+  ],
+  "te": [
+   "Telugu",
+   "텔루구어",
+   [
+    "తెలుగు"
+   ],
+   "telugu",
+   ""
+  ],
+  "kn": [
+   "Kannada",
+   "칸나다어",
+   [
+    "ಕನ್ನಡ"
+   ],
+   "kannada",
+   ""
+  ],
+  "ml": [
+   "Malayalam",
+   "말라얄람어",
+   [
+    "മലയാളം"
+   ],
+   "malayalam",
+   ""
+  ],
+  "si": [
+   "Sinhala",
+   "싱할라어",
+   [
+    "සිංහල"
+   ],
+   "sinhala",
+   ""
+  ],
+  "th": [
+   "Thai",
+   "태국어",
+   [
+    "ภาษาไทย",
+    "ไทย",
+    "タイ語",
+    "泰语"
+   ],
+   "thai",
+   ""
+  ],
+  "lo": [
+   "Lao",
+   "라오어",
+   [
+    "ລາວ"
+   ],
+   "lao",
+   ""
+  ],
+  "my": [
+   "Burmese",
+   "미얀마어",
+   [
+    "버마어",
+    "မြန်မာ",
+    "ミャンマー語",
+    "缅甸语"
+   ],
+   "myanmar",
+   ""
+  ],
+  "km": [
+   "Khmer",
+   "크메르어",
+   [
+    "캄보디아어",
+    "ខ្មែរ",
+    "クメール語",
+    "高棉语"
+   ],
+   "khmer",
+   ""
+  ],
+  "ka": [
+   "Georgian",
+   "조지아어",
+   [
+    "ქართული",
+    "ジョージア語",
+    "格鲁吉亚语"
+   ],
+   "georgian",
+   ""
+  ],
+  "hy": [
+   "Armenian",
+   "아르메니아어",
+   [
+    "Հայերեն",
+    "アルメニア語",
+    "亚美尼亚语"
+   ],
+   "armenian",
+   ""
+  ],
+  "am": [
+   "Amharic",
+   "암하라어",
+   [
+    "አማርኛ",
+    "アムハラ語",
+    "阿姆哈拉语"
+   ],
+   "ethiopic",
+   ""
+  ],
+  "bo": [
+   "Tibetan",
+   "티베트어",
+   [
+    "བོད་ཡིག",
+    "チベット語",
+    "藏语"
+   ],
+   "tibetan",
+   ""
+  ]
+ },
+ "SCRIPT_RANGES": {
+  "cyrillic": "Ѐ-ӿԀ-ԯ",
+  "greek": "Ͱ-Ͽἀ-῿",
+  "arabic": "\u0600-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-\ufeff",
+  "hebrew": "֐-׿יִ-ﭏ",
+  "devanagari": "ऀ-ॿ",
+  "bengali": "ঀ-৿",
+  "gurmukhi": "਀-੿",
+  "gujarati": "઀-૿",
+  "tamil": "஀-௿",
+  "telugu": "ఀ-౿",
+  "kannada": "ಀ-೿",
+  "malayalam": "ഀ-ൿ",
+  "sinhala": "඀-෿",
+  "thai": "฀-๿",
+  "lao": "຀-໿",
+  "tibetan": "ༀ-࿿",
+  "myanmar": "က-႟",
+  "georgian": "Ⴀ-ჿᲐ-Ჿ",
+  "ethiopic": "ሀ-᎟",
+  "khmer": "ក-៿",
+  "armenian": "԰-֏"
+ },
+ "SCRIPT_DEFAULT": {
+  "cyrillic": "ru",
+  "greek": "el",
+  "arabic": "ar",
+  "hebrew": "he",
+  "devanagari": "hi",
+  "bengali": "bn",
+  "gurmukhi": "pa",
+  "gujarati": "gu",
+  "tamil": "ta",
+  "telugu": "te",
+  "kannada": "kn",
+  "malayalam": "ml",
+  "sinhala": "si",
+  "thai": "th",
+  "lao": "lo",
+  "tibetan": "bo",
+  "myanmar": "my",
+  "georgian": "ka",
+  "ethiopic": "am",
+  "khmer": "km",
+  "armenian": "hy"
+ },
+ "EN_DISTINCT": [
+  "about",
+  "actually",
+  "although",
+  "and",
+  "anything",
+  "anyway",
+  "bad",
+  "basically",
+  "because",
+  "been",
+  "being",
+  "can't",
+  "could",
+  "deadline",
+  "difficult",
+  "don't",
+  "easy",
+  "everything",
+  "finally",
+  "first",
+  "good",
+  "great",
+  "has",
+  "have",
+  "how",
+  "however",
+  "just",
+  "maybe",
+  "meeting",
+  "next",
+  "only",
+  "probably",
+  "really",
+  "salary",
+  "schedule",
+  "should",
+  "something",
+  "that",
+  "the",
+  "their",
+  "then",
+  "there",
+  "therefore",
+  "these",
+  "they",
+  "this",
+  "those",
+  "though",
+  "usually",
+  "very",
+  "what",
+  "when",
+  "where",
+  "whether",
+  "which",
+  "while",
+  "why",
+  "will",
+  "with",
+  "without",
+  "would"
+ ],
+ "EN_COLLIDE": {
+  "de": [
+   "also",
+   "bin",
+   "check",
+   "die",
+   "hat",
+   "man",
+   "war",
+   "was",
+   "will"
+  ],
+  "nl": [
+   "also",
+   "check",
+   "then",
+   "will"
+  ],
+  "sv": [
+   "just",
+   "then"
+  ],
+  "da": [
+   "just",
+   "then"
+  ],
+  "no": [
+   "just",
+   "then"
+  ],
+  "fr": [
+   "issue",
+   "offer",
+   "point",
+   "simple"
+  ],
+  "es": [
+   "simple"
+  ],
+  "pt": [
+   "simple"
+  ],
+  "it": [
+   "simple"
+  ],
+  "ro": [
+   "simple"
+  ],
+  "id": [
+   "check"
+  ],
+  "ms": [
+   "check"
+  ],
+  "tl": [
+   "check"
+  ]
+ },
+ "GUARDS": {
+  "ko": "[출력 규칙] 진행 설명까지 모두 한국어로 쓴다. 외국어 용어는 반드시 한국어로 옮겨 쓴다. 원문이 꼭 필요하면 처음 한 번만 한국어 뒤 괄호 안 백틱으로 덧붙인다. 예: 내정 취소(`内定取消し`). 원문을 한국어 대신 쓰거나, 한국어 문장에 외국어 단어를 붙여 쓰지 않는다(`日本の採用에서는`, `legally 검토`처럼 쓰지 않는다). 외국어 자료를 읽었거나 붙여넣은 출력이 외국어여도 답변 언어는 바꾸지 않는다. 코드, 명령, 경로, 고유명사, 약어는 그대로 둔다.",
+  "en": "[Output rule] Write this entire answer, including progress notes between tool calls, in English only. Do not mix Korean, Chinese or Japanese characters or words into sentences. Proper nouns, acronyms, code and paths are fine. Put any foreign text that must appear inside backticks or a code block. Anything else is checked automatically.",
+  "ja": "[出力ルール] この回答はすべて日本語で書くこと。文中に韓国語（ハングル）、中国語の簡体字、英単語を混ぜないこと。固有名詞・略語・コード・パスは例外。外国語の原文が必要な場合はバッククォートかコードブロックに入れること。それ以外の外国文字は自動で検査される。",
+  "zh": "[输出规则] 本回答必须全部使用中文。句中不要混入韩文、日文假名或英文单词。专有名词、缩写、代码和路径除外。需要外语原文时请放在反引号或代码块中。其他外文字符会被自动检查。"
+ },
+ "GUARDS_SHORT": {
+  "ko": "[출력 규칙] 진행 설명까지 모두 한국어로 쓴다. 외국어 용어는 한국어로 옮기고, 원문이 꼭 필요하면 처음 한 번만 뒤에 괄호와 백틱으로 덧붙인다. 예: 내정 취소(`内定取消し`)",
+  "en": "[Output rule] Whole reply, progress notes included, in English. Translate foreign terms; if the original is needed, add it once after the English in parentheses and backticks.",
+  "ja": "[出力ルール] 途中経過も含め全て日本語で書く。外国語の用語は日本語に訳し、原文が必要なら初出のみ訳語の後に括弧とバッククォートで添える。",
+  "zh": "[输出规则] 包括过程说明在内全部用中文。外文术语要译成中文，必要时仅首次在译文后用括号和反引号附原文。"
+ },
+ "GUARD_SHORT_GENERIC": "[Output rule] Whole reply, progress notes included, in {name}. Translate foreign terms; if the original is needed, add it once after the translation in parentheses and backticks.",
+ "ALLOW_SHORT": {
+  "ko": " 허용: {names}.",
+  "ja": " 許可: {names}。",
+  "zh": " 允许: {names}。"
+ },
+ "GUARD_GENERIC": "[Output rule] Write this entire answer in {name} only, the language of the user's message, including progress notes between tool calls; pasted command output in another language does not change it. Do not mix in words or characters from other languages. Proper nouns, acronyms, code and paths are fine. Put any foreign text that must appear inside backticks or a code block.",
+ "ALLOW_NOTE": {
+  "ko": " 단, 사용자가 요청한 {names} 부분은 허용한다(가능하면 코드 블록 안에 쓴다).",
+  "en": " Text in {names} that the user asked for is allowed (prefer a code block).",
+  "ja": " ただし、ユーザーが求めた{names}の部分は許可する（できればコードブロックに入れる）。",
+  "zh": " 但用户要求的{names}内容可以保留（最好放在代码块中）。"
+ },
+ "PHRASE_ALLOW": [
+  "dark mode",
+  "hot reload",
+  "light mode",
+  "merge request",
+  "pull request"
+ ],
+ "TARGET_CHARS": {
+  "hangul": "가-힣",
+  "ja": "぀-ヿ一-鿿",
+  "han": "一-鿿",
+  "latin": "A-Za-zÀ-ɏ"
+ }
+}

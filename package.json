@@ -1,0 +1,59 @@
+{
+  "name": "pure-language",
+  "version": "0.2.0",
+  "description": "Keeps every answer in the conversation's language: no stray foreign words or characters.",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "omp-plugin",
+    "openclaw-plugin",
+    "language",
+    "i18n"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joowon-jang/pure-language.git"
+  },
+  "homepage": "https://github.com/joowon-jang/pure-language",
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "js/engine.mjs",
+    "js/common.mjs",
+    "js/settings.mjs",
+    "js/pi-extension.mjs",
+    "js/openclaw.mjs",
+    "engine/data/tables.json",
+    "engine/data/hanja_ko.json",
+    "engine/data/ja_kanji.txt",
+    "openclaw.plugin.json",
+    "README.md",
+    "README.ko.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "exports": {
+    ".": "./js/engine.mjs",
+    "./engine": "./js/engine.mjs"
+  },
+  "pi": {
+    "extensions": [
+      "./js/pi-extension.mjs"
+    ]
+  },
+  "omp": {
+    "extensions": [
+      "./js/pi-extension.mjs"
+    ]
+  },
+  "openclaw": {
+    "extensions": [
+      "./js/openclaw.mjs"
+    ]
+  },
+  "scripts": {
+    "test": "node --test tests/js/"
+  }
+}

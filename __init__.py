@@ -143,7 +143,8 @@ def _on_transform(response_text="", session_id="", turn_id=None, **kwargs):
         text, hits = E.clean(response_text, st["user"], st["user_cjk"], target=st["target"],
                              allowed=st["allowed"] or frozenset({st["target"]}), user_text=st["text"],
                              rewriter=_rewriter if _CFG["rewrite"] else None,
-                             max_lines=_CFG["max_lines"], context=tools)
+                             max_lines=_CFG["max_lines"], context=tools,
+                             local_first=_CFG.get("local_fix") == "first")
     except Exception:  # never lose the answer because of the cleaner
         log.warning("pure-language: cleaner failed", exc_info=True)
         return None

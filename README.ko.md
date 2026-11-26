@@ -2,7 +2,7 @@
 
 답변을 **한 가지 언어로만** 유지하는 플러그인입니다. 답변 언어를 정해서 모델에게 미리 알려 주고, 완성된 답변에 다른 언어의 단어나 글자가 섞였는지 검사합니다. 예를 들어 한국어 답변에 끼어든 영어 단어, 일본어 답변에 섞인 중국어 글자, 영어 답변 속 한글을 잡아냅니다.
 
-**헤르메스 에이전트**, **클로드 코드**, **코덱스**에서 쓸 수 있습니다. 표준 파이썬만 쓰므로 따로 설치할 꾸러미가 없습니다.
+**헤르메스 에이전트**, **클로드 코드**, **코덱스**, **오픈클로**, **파이**, **오 마이 파이**에서 쓸 수 있습니다. 파이썬 엔진은 표준 라이브러리만, 자바스크립트 엔진(오픈클로, 파이, 오 마이 파이용)은 외부 꾸러미 없이 동작합니다. 두 엔진은 같은 단어표를 읽고, 같은 결과를 내는지 시험으로 확인합니다(`tests/parity.py`).
 
 ## 답변 언어를 정하는 순서
 
@@ -18,17 +18,30 @@
 
 `일본어로 메일 초안 써줘`처럼 일부만 외국어인 요청은 답변 언어를 그대로 두고 그 언어를 허용합니다. 54개 언어, 22가지 문자를 알아봅니다.
 
+언어 지정은 요청일 때만 명령으로 봅니다. `왜 영어로 대답했지?`처럼 지난 답변을 묻는 말은 언어를 바꾸지 않습니다. 도구가 메시지 끝에 덧붙이는 안내문(`[System: ...]`)과 이 플러그인이 넣은 규칙 줄도 언어 판단에서 뺍니다.
+
 ## 지시문 문구
 
 지시문은 외국어 용어를 한국어로 옮겨 쓰고, 원문이 꼭 필요할 때만 처음 한 번 괄호 안 백틱으로 덧붙이라고 요구합니다. 예: 내정 취소(`内定取消し`). 예전 문구("외국어 원문은 백틱 안에 쓴다")는 모델이 원문을 번역하지 않고 백틱에 넣어 그대로 쓰게 만들었습니다. 붙여넣은 자료의 언어는 인용으로만 허용하고 지시문에 "허용"이라고 알리지 않습니다. 알리면 모델이 그 언어로 써도 된다고 받아들이기 때문입니다.
 
 ## 도구별 동작
 
-| | 헤르메스 | 클로드 코드 | 코덱스 |
-|---|---|---|---|
-| 답변 전 경고문 넣기 | 됨 | 됨 | 됨 |
-| 완성된 답변 검사 | 됨 | 됨 | 됨 |
-| 섞임 처리 | 답변을 교정본으로 **바꿔치기** | 섞인 문장만 짧게 다시 쓰게 함 | 클로드 코드와 같음 |
+| 도구 | 답변 전 지시문 | 섞인 답변 처리 |
+|---|---|---|
+| 헤르메스 | `pre_llm_call` | 다시 쓴 답변으로 **바꿔치기** |
+| 오 마이 파이 | 숨은 메시지(`before_agent_start`) | 완성된 답변을 **바꿔치기**(`assistant_message`), 글이 흘러나오는 동안에는 섞인 단어를 화면에서 가림 |
+| 파이 | 숨은 메시지(`before_agent_start`) | 완성된 답변을 **바꿔치기**(`message_end`), 끝나면 화면도 교정본으로 다시 그림 |
+| 오픈클로 | `before_prompt_build` | 초안을 돌려보내 모델이 답변을 다시 쓰게 함(`before_agent_finalize`), 나가는 답변도 교정 |
+| 클로드 코드, 코덱스 | `UserPromptSubmit` | 섞인 문장만 다시 쓰게 함(`Stop`) |
+
+섞인 줄은 기본적으로 **모델이 다시 씁니다**. 단어표와 한자 독음으로 고치면 문장이 어색해질 수 있어서, 모델 호출이 실패했을 때만 씁니다. 비용을 줄이려면 `"local_fix": "first"`로 규칙 교정을 먼저 쓰게 할 수 있습니다.
+
+### 도구별 한계
+
+- **파이**: 답변 글자를 그리는 연결 지점이 없어서, 글이 흘러나오는 동안에는 섞인 단어가 잠깐 보입니다. 답변이 끝나면 교정본으로 바뀝니다.
+- **오 마이 파이**: 흘러나오는 글을 가리려면 `omp config set extensionRenderers.assistantText true`를 켜야 합니다.
+- **오픈클로를 클로드 코드 로그인으로 쓸 때**(`claude-cli` 실행 방식): 답변 확정 직전과 기록 저장 단계에 연결 지점이 없어서, 지시문과 나가는 답변만 처리합니다. 저장된 기록에는 원래 답변이 남습니다. 키로 연결한 모델은 전 과정을 처리합니다.
+- **윈도우의 오픈클로**: 실행 중인 게이트웨이에서 플러그인을 다시 읽으면 권한 오류(`EPERM`)가 날 수 있습니다. 게이트웨이를 다시 시작하면 됩니다.
 
 ## 설치
 
@@ -44,23 +57,48 @@ claude plugin install pure-language@pure-language
 # 코덱스 (설치 후 /hooks 에서 두 연결 지점을 신뢰 허용해야 동작)
 codex plugin marketplace add joowon-jang/pure-language
 codex plugin add pure-language@pure-language
+
+# 오 마이 파이
+omp plugin install github:joowon-jang/pure-language
+omp config set extensionRenderers.assistantText true
+
+# 파이
+pi install git:github.com/joowon-jang/pure-language
+
+# 오픈클로
+openclaw plugins install git:github.com/joowon-jang/pure-language --accept-capabilities
+openclaw plugins enable pure-language
+openclaw config set plugins.entries.pure-language.hooks.allowConversationAccess true
 ```
 
 ## 비용 줄이기
 
-- 매 턴 붙이는 지시문은 한 줄(40~100자)입니다. 긴 지시문(약 300자)은 섞임이 발견된 다음 턴에만 쓰고, 그 뒤에는 다시 한 줄로 돌아갑니다.
-- 깨끗한 답변은 모델을 호출하지 않습니다. 한국어는 단어표와 한자 독음으로 상당수를 직접 고칩니다.
-- 헤르메스에서 모델에게 다시 쓰게 할 때는 섞인 문장만 보냅니다. 문단 전체를 보내지 않습니다.
+- 매 턴 붙이는 지시문은 한 줄(40~100자)입니다. 긴 지시문(약 300자)은 섞임이 발견된 다음 턴에만 씁니다.
+- 깨끗한 답변은 모델을 호출하지 않습니다.
+- 다시 쓰게 할 때는 섞인 줄(긴 줄은 섞인 문장)만 보냅니다. 결과는 저장해 두고 다시 씁니다.
 - 다시 쓰기 모델은 작은 모델이면 충분합니다. 시험에서는 `claude-haiku-4-5`로 충분했습니다.
-- 클로드 코드와 코덱스는 섞인 단어가 한두 개면 추가 턴을 쓰지 않습니다. 대신 다음 턴 지시문을 강화합니다(`stop_min_hits`).
+- 비용을 더 줄이려면 `"local_fix": "first"`로 두고 `stop_min_hits`를 높입니다.
 
 ## 설정
 
-설정 파일은 선택 사항입니다. 헤르메스는 `$HERMES_HOME/pure-language.json`, 클로드 코드는 `~/.claude/pure-language.json`, 코덱스는 `$CODEX_HOME/pure-language.json`을 읽습니다. 한국어 사용자라면 아래처럼 두는 것을 권합니다.
+설정 파일은 선택 사항입니다.
+
+| 도구 | 파일 |
+|---|---|
+| 헤르메스 | `$HERMES_HOME/pure-language.json` |
+| 클로드 코드 | `~/.claude/pure-language.json` |
+| 코덱스 | `$CODEX_HOME/pure-language.json` |
+| 오 마이 파이 | `~/.omp/agent/pure-language.json` |
+| 파이 | `~/.pi/agent/pure-language.json` |
+| 오픈클로 | `openclaw.json`의 `plugins.entries.pure-language.config`, 또는 `~/.openclaw/pure-language.json` |
+
+한국어 사용자라면 아래처럼 두는 것을 권합니다.
 
 ```json
 { "default_language": "ko" }
 ```
+
+파이와 오 마이 파이는 `rewrite_model`(`제공자/모델` 형식)로 다시 쓰기 모델을 정할 수 있습니다. 비워 두면 오 마이 파이는 `@smol` 역할 모델, 그다음 대화 중인 모델을 씁니다.
 
 ## 다시 쓰기 모델 고르기 (헤르메스)
 

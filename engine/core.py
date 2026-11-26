@@ -51,7 +51,8 @@ _PUNCT_MAP = {'、': ', ', '。': '. ', '「': '"', '」': '"', '『': '"', '』
 _WORDS = {'中小企业': '중소기업', '中小企業': '중소기업', '企業': '기업', '比价': '비교', '比價': '비교', '会社': '회사', '内定': '내정', '先日': '전날', '検讨': '검토', '检讨': '검토', '検討': '검토', '面接': '면접', '面談': '면담', '面谈': '면담', '待遇': '대우', '提示': '제시', '条件': '조건', '連絡': '연락', '联络': '연락', '確認': '확인', '确认': '확인', '返信': '회신', '回复': '회신', '答复': '답변', '回答': '답변', '入社': '입사', '入职': '입사', '退社': '퇴사', '离职': '퇴사', '退职': '퇴직', '辞职': '사직', '代表': '대표', '会计': '회계', '会計': '회계', '経理': '회계', '人事': '인사', '经验': '경험', '經驗': '경험', '实绩': '실적', '実績': '실적', '实际': '실제', '実際': '실제', '手续': '수속', '手続': '절차', '决定': '결정', '协定': '합의', '协商': '협의', '協商': '협의', '谈判': '협상', '談判': '협상', '要求': '요구', '说明': '설명', '説明': '설명', '明确': '명확히', '明確': '명확히', '印象': '인상', '意思': '의사', '现在': '현재', '現在': '현재', '时间': '시간', '時間': '시간', '一般': '일반', '通常': '통상', '可能': '가능', '有效': '유효', '问题': '문제', '問題': '문제', '日本': '일본', '韩国': '한국', '韓國': '한국', '薪资': '급여', '工資': '급여', '薪酬': '보수', '基本': '기본', '正当': '정당', '混入': '혼입', '幅': '폭', '尽早': '조속히', '最常见的': '가장 흔한', '特有': '특유', '試用期間': '수습 기간', '试用期': '수습 기간', '賞与': '상여', '奖金': '상여', '残業': '잔업', '加班': '초과 근무', '履歴書': '이력서', '職務経歴書': '경력 기술서', '求人票': '구인 공고', '書類選考': '서류 전형', '内定通知書': '내정 통지서', '内定取消': '내정 취소', '内定辞退': '내정 사퇴', '健康診断書': '건강 진단서', '経験': '경험', '給与': '급여', '年収': '연봉', '相談': '상담', '交渉': '협상', '調整': '조정', '期間': '기간', '契約': '계약', '労働': '노동', '雇用': '고용', '採用': '채용', '中途': '경력', '新卒': '신입', '一般的': '일반적', '様': '님'}
 _WORD_RE = re.compile("|".join(re.escape(k) for k in sorted(_WORDS, key=len, reverse=True)))
 
-_LATIN_RE = re.compile(r"(?<![A-Za-z0-9_./\\:@#%=&?+~-])([A-Za-z]{2,})(?![A-Za-z0-9_./\\:@#%=&?+~-])")
+# a period ends the word only at a sentence end ("legally."), not in "file.txt"
+_LATIN_RE = re.compile(r"(?<![A-Za-z0-9_./\\:@#%=&?+~-])([A-Za-z]{2,})(?![A-Za-z0-9_/\\:@#%=&?+~-]|\.[A-Za-z0-9_])")
 _HANGUL_CH = re.compile("[\uAC00-\uD7A3]")
 _LATIN_ALLOW = {
     "git", "npm", "npx", "pnpm", "yarn", "pip", "uv", "python", "node", "deno", "bun",
@@ -407,14 +408,43 @@ def _instruction_language(msg):
     return detect_language(msg), ""
 
 
-def _find_cmd(patterns, msg):
+# "왜 영어로 대답했지?", "why did you answer in English?": talk about a past reply, not a request
+_PAST_AFTER_RE = re.compile(r"\s*(?:했|하였|한\s|한거|한 거|된|되었|하지\s*않|안\s*했)")
+_ASK_WHY_RE = re.compile(r"\b(?:why|did you|didn't you|have you|were you)\b|왜|어째서|なぜ|どうして|为什么|為什麼", re.I)
+
+
+def _find_cmd(patterns, msg, commands_only=False):
     found = []
+    msg = msg or ""
     for pat in patterns:
-        for m in pat.finditer(msg or ""):
+        for m in pat.finditer(msg):
             lang = _ALIAS_TO_LANG.get(m.group("l").lower())
-            if lang:
-                found.append((m.start(), lang))
+            if not lang:
+                continue
+            if commands_only:
+                a = msg.rfind("\n", 0, m.start()) + 1
+                b = msg.find("\n", m.end())
+                line = msg[a: b if b >= 0 else len(msg)]
+                if _PAST_AFTER_RE.match(msg, m.end()) or _ASK_WHY_RE.search(line):
+                    continue
+            found.append((m.start(), lang))
     return [l for _, l in sorted(found)]
+
+
+def _guard_prefixes():
+    texts = list(_GUARDS.values()) + list(_GUARDS_SHORT.values()) + [_GUARD_GENERIC, _GUARD_SHORT_GENERIC]
+    return tuple(sorted({t[:t.index("]") + 1] for t in texts if "]" in t[:40]} | {"[pure-language]"}))
+
+
+# notices the host appends to the user's message ("[System: The skills ... changed ...]")
+_HOST_NOTE_RE = re.compile(r"^[ \t]*\[(?:System|SYSTEM|IMPORTANT|Note|NOTE|Context|CONTEXT)\b.*?\][ \t]*$", re.S | re.M)
+
+
+def strip_host_notes(msg):
+    """The user's own words: drop host notices and this plugin's rule lines."""
+    msg = _HOST_NOTE_RE.sub("", msg or "")
+    prefixes = _guard_prefixes()
+    return "\n".join(l for l in msg.splitlines() if not l.lstrip().startswith(prefixes)).strip()
 
 
 _GUARDS = {
@@ -630,6 +660,7 @@ def _clean_cjk(seg, user_cjk, res, final):
         ctx = seg[max(0, m.start() - 20): m.end() + 20]
         parts, last = [], 0
         for w in _WORD_RE.finditer(run):          # known words first
+            res.hits.append(("cjk-word", w.group(0), ctx))
             parts.append((run[last:w.start()], False))
             parts.append((_WORDS[w.group(0)], True))
             last = w.end()
@@ -666,7 +697,7 @@ def _clean_cjk(seg, user_cjk, res, final):
     return "".join(out)
 
 
-_PHRASE_RE = re.compile(r"(?<![A-Za-z0-9_./\\:@#%=&?+~`-])[a-z]{2,}(?:[ -][a-z]{2,})+(?![A-Za-z0-9_./\\:@#%=&?+~`-])")
+_PHRASE_RE = re.compile(r"(?<![A-Za-z0-9_./\\:@#%=&?+~`-])[a-z]{2,}(?:[ -][a-z]{2,})+(?![A-Za-z0-9_/\\:@#%=&?+~`-]|\.[A-Za-z0-9_])")
 
 
 _PHRASE_ALLOW = {"pull request", "merge request", "hot reload", "dark mode", "light mode"}
@@ -1013,8 +1044,13 @@ def _sentences(line):
 
 
 def clean(text, user_words=(), user_cjk=(), rewrite=True, target="ko", allowed=frozenset(), user_text="",
-          rewriter=None, max_lines=20, context=""):
+          rewriter=None, max_lines=20, context="", local_first=False):
     """Returns (cleaned_text, hits). Pure apart from the optional rewrite call.
+
+    With a rewriter, every line that leaks is rewritten by the model: word tables and
+    Hanja readings can read awkwardly (Japanese ``書類選考`` read as 서류선고), so they
+    are only the fallback when the rewrite fails. ``local_first=True`` restores the
+    old order (rules first, the model only for what they cannot fix).
 
     ``context``: other material of this turn the answer may quote word for word
     (tool and command output). Terminal, log and stack-trace lines are never touched."""
@@ -1031,6 +1067,8 @@ def clean(text, user_words=(), user_cjk=(), rewrite=True, target="ko", allowed=f
     exempt = set(user_words) | code_terms
     user_cjk = set(user_cjk)
     kw = dict(target=target, allowed=allowed, user_text=user_text, context=context)
+    model_all = bool(rewrite and rewriter is not None and not local_first)
+    needs = (lambda r: r.unresolved or bool(r.hits)) if model_all else (lambda r: r.unresolved)
     hits, pending, split_parts = pre_hits, [], {}
     for i in range(0, len(parts), 2):
         lines = parts[i].split("\n")
@@ -1040,7 +1078,7 @@ def clean(text, user_words=(), user_cjk=(), rewrite=True, target="ko", allowed=f
                 continue                          # pasted prompt / output / trace line
             r = _clean_line(line, exempt, user_cjk, final=not rewrite, **kw)
             hits.extend(r.hits)
-            if r.unresolved:
+            if needs(r):
                 pending.append((i, j, line))
             lines[j] = r.text
         split_parts[i] = lines
@@ -1053,7 +1091,7 @@ def clean(text, user_words=(), user_cjk=(), rewrite=True, target="ko", allowed=f
             units = []
             if len(orig) > 80:
                 for a, b in _sentences(orig):
-                    if _clean_line(orig[a:b], exempt, user_cjk, final=False, **kw).unresolved:
+                    if needs(_clean_line(orig[a:b], exempt, user_cjk, final=False, **kw)):
                         units.append((a, b))
             plans.append(units or [(0, len(orig))])
         todo = [orig[a:b] for (_, _, orig), units in zip(pending, plans) for a, b in units]
@@ -1131,8 +1169,8 @@ def resolve_turn(memo, session_id, msg, default="en"):
     key = session_id or "default"
     _sticky = memo.setdefault("sticky", {})
     _last = memo.setdefault("last", {})
-    msg = msg or ""
-    full = _find_cmd(_FULL_CMD, msg)
+    msg = strip_host_notes(msg)
+    full = _find_cmd(_FULL_CMD, msg, commands_only=True)
     if full and not _ONCE_RE.search(msg):
         _sticky[key] = full[-1]
     part = set(_find_cmd(_PART_CMD, msg))

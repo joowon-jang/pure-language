@@ -392,8 +392,10 @@ class CliHooks(unittest.TestCase):
         self.assertEqual(self.run_hook("stop", {"session_id": "x1", "turn_id": "t1", "stop_hook_active": False,
                                                 "last_assistant_message": "It takes two weeks."}, env), {})
         # one stray word: no extra turn, but the next turn gets the full rule
-        self.assertEqual(self.run_hook("stop", {"session_id": "x1", "turn_id": "t1", "stop_hook_active": False,
-                                                "last_assistant_message": "It takes 보통 two weeks."}, env), {})
+        out = self.run_hook("stop", {"session_id": "x1", "turn_id": "t1", "stop_hook_active": False,
+                                                "last_assistant_message": "It takes 보통 two weeks."}, env)
+        self.assertEqual(out["decision"], "block")   # one stray word is enough now
+        self.assertIn("보통", out["reason"])
         out = self.run_hook("prompt", {"session_id": "x1", "turn_id": "t2", "prompt": "And for juniors?"}, env)
         self.assertIn("Do not mix Korean", out["hookSpecificOutput"]["additionalContext"])
         out = self.run_hook("prompt", {"session_id": "x1", "turn_id": "t3", "prompt": "And for seniors?"}, env)
@@ -429,6 +431,62 @@ class CliHooks(unittest.TestCase):
         self.run_hook("prompt", {"session_id": "c2", "prompt": "앞으로는 영어로 대답해줘"}, env)
         out = self.run_hook("prompt", {"session_id": "c2", "prompt": "연봉 협상 팁 알려줘"}, env)
         self.assertIn("English", out["hookSpecificOutput"]["additionalContext"])
+
+
+class SentenceEndWords(unittest.TestCase):
+    def test_word_before_period_is_checked(self):
+        text, hits = E.clean("결과를 확인했습니다 legally.", set(), set(), rewrite=False, target="ko")
+        self.assertIn("legally", [h[1] for h in hits])
+
+    def test_file_names_still_skipped(self):
+        text, hits = E.clean("설정은 legally.txt 파일과 notes.md에 있습니다.", set(), set(), rewrite=False, target="ko")
+        self.assertEqual(hits, [])
+
+
+class ModelFirst(unittest.TestCase):
+    """With a rewriter every leaking line goes to the model; rules are the fallback."""
+
+    def test_fixable_word_goes_to_model(self):
+        seen = []
+        def rw(lines, *a):
+            seen.extend(lines)
+            return ["보통 서류 전형을 거칩니다."]
+        text, hits = E.clean("보통 書類選考를 거칩니다.", set(), set(), target="ko", rewriter=rw)
+        self.assertEqual(seen, ["보통 書類選考를 거칩니다."])
+        self.assertEqual(text, "보통 서류 전형을 거칩니다.")
+
+    def test_rules_are_fallback(self):
+        def rw(lines, *a):
+            raise RuntimeError("offline")
+        text, _ = E.clean("오늘 schedule을 정했습니다.", set(), set(), target="ko", rewriter=rw)
+        self.assertEqual(text, "오늘 일정을 정했습니다.")
+
+    def test_local_first_keeps_old_order(self):
+        seen = []
+        text, _ = E.clean("오늘 schedule을 정했습니다.", set(), set(), target="ko",
+                          rewriter=lambda l, *a: seen.extend(l) or l, local_first=True)
+        self.assertEqual(seen, [])
+        self.assertEqual(text, "오늘 일정을 정했습니다.")
+
+
+class NotACommand(unittest.TestCase):
+    def test_question_about_past_reply(self):
+        memo = {}
+        self.assertEqual(E.resolve_turn(memo, "s", "일본 취업 알려줘", default="ko")[0], "ko")
+        self.assertEqual(E.resolve_turn(memo, "s", "왜 영어로 대답했지?", default="ko")[0], "ko")
+        self.assertEqual(E.resolve_turn(memo, "s", "고마워", default="ko")[0], "ko")   # nothing sticky
+
+    def test_request_still_works(self):
+        self.assertEqual(E.resolve_turn({}, "s", "앞으로는 영어로 대답해줘", default="ko")[0], "en")
+
+    def test_host_notice_ignored(self):
+        msg = ("이어서 진행해\n\n[System: The skills available in this conversation changed after its "
+               "system prompt was built.\nNow available:\n    - x: Use when y. Port, test.]")
+        self.assertEqual(E.resolve_turn({}, "s", msg, default="en")[0], "ko")
+
+    def test_own_rule_line_ignored(self):
+        msg = "계속\n\n[Output rule] Write this entire answer in English only."
+        self.assertEqual(E.resolve_turn({}, "s", msg, default="en")[0], "ko")
 
 
 if __name__ == "__main__":

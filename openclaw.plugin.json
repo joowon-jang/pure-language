@@ -1,0 +1,62 @@
+{
+  "id": "pure-language",
+  "name": "Pure Language",
+  "description": "Keeps every answer in the conversation's language: no stray foreign words or characters.",
+  "version": "0.2.0",
+  "categories": [
+    "other"
+  ],
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "conversationAccess": [
+      "read"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "default_language": {
+        "type": "string"
+      },
+      "rewrite": {
+        "type": "boolean"
+      },
+      "rewrite_model": {
+        "type": "string"
+      },
+      "timeout": {
+        "type": "integer",
+        "minimum": 5,
+        "maximum": 25
+      },
+      "max_lines": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "stop_action": {
+        "type": "string",
+        "enum": [
+          "rewrite",
+          "off"
+        ]
+      },
+      "stop_min_hits": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "log": {
+        "type": "boolean"
+      },
+      "local_fix": {
+        "type": "string",
+        "enum": [
+          "fallback",
+          "first"
+        ]
+      }
+    }
+  }
+}

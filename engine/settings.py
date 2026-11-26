@@ -12,8 +12,10 @@ DEFAULTS = {
     "max_lines": 20,            # Hermes: most lines per rewrite call
     "stop_action": "rewrite",   # Claude Code / Codex: "rewrite" asks the model to restate leaked
                                 #   sentences, "off" only injects the guard
-    "stop_min_hits": 3,         # Claude Code / Codex: distinct leaked words before asking for a
-                                #   correction (an extra turn); a wrong-language reply always does
+    "stop_min_hits": 1,         # Claude Code / Codex / OpenClaw: distinct leaked words before asking
+                                #   for a correction (an extra turn); a wrong-language reply always does
+    "local_fix": "fallback",    # "fallback": the model rewrites every leaking line, word tables and
+                                #   Hanja readings only when it cannot; "first": rules first (cheaper)
     "log": False,               # write hit snippets (not whole answers) to a local log file
 }
 
@@ -37,6 +39,8 @@ def load(paths):
     except (TypeError, ValueError):
         for k in ("timeout", "max_lines", "stop_min_hits"):
             cfg[k] = DEFAULTS[k]
+    if cfg["local_fix"] not in ("fallback", "first"):
+        cfg["local_fix"] = "fallback"
     if not isinstance(cfg["default_language"], str) or not cfg["default_language"]:
         cfg["default_language"] = "en"
     return cfg

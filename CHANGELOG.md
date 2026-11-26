@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+New hosts: OpenClaw, Pi and Oh My Pi, through a dependency-free JavaScript port of the engine (`js/engine.mjs`) that reads the same word tables as the Python engine; `tests/parity.py` keeps the two identical.
+Pi / Oh My Pi replace the finished message (`message_end` / `assistant_message`), ask for another pass when that fails, and Oh My Pi hides leaked words while the answer streams. OpenClaw rejects a leaking draft and has the model write it again (`before_agent_finalize`), and cleans outgoing replies.
+Every leaking line is now rewritten by a model by default; word tables and Hanja readings are only the fallback (`local_fix: "first"` restores the old order). `stop_min_hits` defaults to 1.
+Language detection ignores notices the host appends to the user message (`[System: ...]`) and the plugin's own rule line, and no longer treats a question about an earlier reply (`왜 영어로 대답했지?`) as a language command.
+Words right before a sentence-ending period (`legally.`) are caught; file names like `file.txt` are still skipped.
+
 ## 0.1.0
 
 First public release: Hermes Agent plugin, Claude Code and Codex hooks, 54 languages.
