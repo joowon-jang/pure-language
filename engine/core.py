@@ -452,13 +452,21 @@ _HOST_TURN_RE = re.compile(r"\s*\[(?:System|SYSTEM|IMPORTANT)\s*:")
 # one-line wrapper tags ("[OUT-OF-BAND USER MESSAGE — ...]", "[/OUT-OF-BAND USER MESSAGE]")
 # Words and separators never overlap and the tail is capped, so matching stays linear.
 _HOST_TAG_RE = re.compile(r"^[ \t]*\[/?[A-Z][A-Z0-9]*(?:[ _-][A-Z0-9]+)+\b[^\]\n]{0,200}\][ \t]*$", re.M)
+# Hermes appends attached files and their warnings below the typed text
+# (agent/context_references.py): "--- Attached Context ---" up to the end of the message.
+# Those notes are English and come last, so they decided the language instead of the user.
+_HOST_FOOTER_RE = re.compile(r"^--- (?:Context Warnings|Attached Context) ---[ \t]*$", re.M)
 
 
 def strip_host_notes(msg):
-    """The user's own words: drop host notices and this plugin's rule lines."""
+    """The user's own words: drop host notices, attachments and this plugin's rule lines."""
     if _HOST_TURN_RE.match(msg or ""):
         return ""   # the whole message is the host's (background job finished, nudges)
-    msg = _HOST_TAG_RE.sub("", _HOST_NOTE_RE.sub("", msg or ""))
+    msg = msg or ""
+    footer = _HOST_FOOTER_RE.search(msg)
+    if footer:
+        msg = msg[:footer.start()]
+    msg = _HOST_TAG_RE.sub("", _HOST_NOTE_RE.sub("", msg))
     prefixes = _guard_prefixes()
     return "\n".join(l for l in msg.splitlines() if not l.lstrip().startswith(prefixes)).strip()
 

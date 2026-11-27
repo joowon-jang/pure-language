@@ -62,6 +62,16 @@ class HostNoteSpeed(unittest.TestCase):
         msg = "[OUT-OF-BAND USER MESSAGE — a direct message]\n확실하게 수정해.\n[/OUT-OF-BAND USER MESSAGE]"
         self.assertEqual(E.strip_host_notes(msg), "확실하게 수정해.")
 
+    def test_attached_context_is_not_the_users_words(self):
+        # Hermes appends an English note for every @file: attachment; it must not set the language
+        msg = "@file:Downloads/【KOREC専用】履歴書_JANG_JOOWON.xlsx\n\n여기에 병역을 추가해줘.\n2018년9월입대 2020년4월전역\n대한민국 육군\n\n--- Attached Context ---\n\n📎 @file:Downloads/【KOREC専用】履歴書_JANG_JOOWON.xlsx (application/vnd.ms-excel, 557.8 KB) — binary file, not inlined as text. It is available on disk at `C:\\\\Users\\\\x\\\\a.xlsx`. Use your tools to work with it (read or convert it, extract its text, or view/render it as needed); do not tell the user the file type is unsupported."
+        self.assertEqual(E.strip_host_notes(msg).splitlines()[-1], "대한민국 육군")
+        self.assertEqual(E.resolve_turn({}, "s", msg, default="en")[0], "ko")
+        warn = "고쳐 줘\n\n--- Context Warnings ---\n- @x: not expanded (maximum 8 @-references per message)"
+        self.assertEqual(E.strip_host_notes(warn), "고쳐 줘")
+        self.assertEqual(E.strip_host_notes("앞\n--- Attached Contexts ---\n뒤"), "앞\n--- Attached Contexts ---\n뒤")
+        self.assertLess(self._fast("\n" * 20000 + "--- Attached Context ---"), 0.1)
+
 
 class Korean(unittest.TestCase):
     def test_english_leaks(self):

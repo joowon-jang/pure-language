@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.5
+
+Attached files no longer decide the answer language. Hermes appends an English `--- Attached Context ---` block (and `--- Context Warnings ---`) below the typed text for every `@file:` reference; the language was read from the last lines, so a Korean request with an attachment got an English rule. Everything from that marker to the end is now dropped before the language is decided, in both engines.
+
 ## 0.2.4
 
 Host-notice patterns run on every user message and are now linear: the wrapper-tag pattern no longer lets its word and separator parts overlap (a 200-character `[A-A-A…` line took exponential time before) and its tail is capped at 200 characters; a multi-line notice is matched line by line for at most 40 lines instead of `.*?` over the rest of the message. Timing tests cover both engines.

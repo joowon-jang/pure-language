@@ -336,11 +336,16 @@ const HOST_TURN_RE = /^\s*\[(?:System|SYSTEM|IMPORTANT)\s*:/;
 // one-line wrapper tags ("[OUT-OF-BAND USER MESSAGE — ...]", "[/OUT-OF-BAND USER MESSAGE]")
 // words and separators never overlap and the tail is capped: linear
 const HOST_TAG_RE = /^[ \t]*\[\/?[A-Z][A-Z0-9]*(?:[ _-][A-Z0-9]+)+\b[^\]\n]{0,200}\][ \t]*$/gm;
+// Hermes appends attached files and their warnings below the typed text, up to the end
+const HOST_FOOTER_RE = /^--- (?:Context Warnings|Attached Context) ---[ \t]*$/m;
 
-/** The user's own words: drop host notices and this plugin's rule lines. */
+/** The user's own words: drop host notices, attachments and this plugin's rule lines. */
 export function stripHostNotes(msg) {
   if (HOST_TURN_RE.test(msg || "")) return "";
-  msg = (msg || "").replace(HOST_NOTE_RE, "").replace(HOST_TAG_RE, "");
+  msg = msg || "";
+  const footer = HOST_FOOTER_RE.exec(msg);
+  if (footer) msg = msg.slice(0, footer.index);
+  msg = msg.replace(HOST_NOTE_RE, "").replace(HOST_TAG_RE, "");
   return strip(splitlines(msg).filter((l) => !GUARD_PREFIXES.some((p) => lstrip(l).startsWith(p))).join("\n"));
 }
 

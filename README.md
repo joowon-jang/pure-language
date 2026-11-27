@@ -38,7 +38,8 @@ Sinhala, Thai, Lao, Burmese, Khmer, Georgian, Armenian, Amharic, Tibetan.
 Only requests count as commands: `영어로 대답해` switches, while `왜 영어로
 대답했지?`, `자꾸 영어로 대답하고` or `why did you answer in English?` talk about
 earlier replies and do not. Notices and wrapper tags the host adds to your
-message (`[System: ...]`, `[OUT-OF-BAND USER MESSAGE …]`) and the plugin's own
+message (`[System: ...]`, `[OUT-OF-BAND USER MESSAGE …]`, the `--- Attached Context ---` block
+below an `@file:` reference) and the plugin's own
 rule line are ignored; a message that is only a host notice (a background job
 finished) keeps the previous language, and so does a message of a few English
 words (`continue`, `ok`).

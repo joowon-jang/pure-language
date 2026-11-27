@@ -1,6 +1,6 @@
 {
   "name": "pure-language",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Keeps every answer in the conversation's language: no stray foreign words or characters.",
   "license": "MIT",
   "type": "module",

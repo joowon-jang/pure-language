@@ -184,4 +184,11 @@ test("host-notice patterns stay linear", () => {
   const msg = "한국어로 답해 줘\n\n[System: The skills available changed.\nNow available:\n    - korean-only-output: Use for all replies]";
   assert.equal(E.stripHostNotes(msg), "한국어로 답해 줘");
   assert.equal(E.stripHostNotes("[OUT-OF-BAND USER MESSAGE — a direct message]\n확실하게 수정해.\n[/OUT-OF-BAND USER MESSAGE]"), "확실하게 수정해.");
+  // Hermes appends an English note for every @file: attachment; it must not set the language
+  const att = "@file:Downloads/【KOREC専用】履歴書_JANG_JOOWON.xlsx\n\n여기에 병역을 추가해줘.\n2018년9월입대 2020년4월전역\n대한민국 육군\n\n--- Attached Context ---\n\n📎 @file:Downloads/【KOREC専用】履歴書_JANG_JOOWON.xlsx (application/vnd.ms-excel, 557.8 KB) — binary file, not inlined as text. It is available on disk at `C:\\\\Users\\\\x\\\\a.xlsx`. Use your tools to work with it (read or convert it, extract its text, or view/render it as needed); do not tell the user the file type is unsupported.";
+  assert.equal(E.stripHostNotes(att).split("\n").at(-1), "대한민국 육군");
+  assert.equal(E.stripHostNotes("고쳐 줘\n\n--- Context Warnings ---\n- @x: not expanded"), "고쳐 줘");
+  start = performance.now();
+  E.stripHostNotes("\n".repeat(20000) + "--- Attached Context ---");
+  assert.ok(performance.now() - start < 100);
 });

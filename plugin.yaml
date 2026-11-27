@@ -1,5 +1,5 @@
 name: pure-language
-version: "0.2.4"
+version: "0.2.5"
 description: Keep every answer in one language - picks the target from the user's command or message (54 languages) and fixes words and characters leaking in from other languages
 author: joowon-jang
 requires_hermes: ">=0.23.4"
