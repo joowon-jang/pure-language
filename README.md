@@ -54,7 +54,8 @@ words (`continue`, `ok`).
   and distinctive English words inside other Latin-script languages (cognates
   such as French `important` or German `also` are left alone).
 
-Never touched: code blocks and inline code, URLs and paths, ACRONYMS, proper
+Never touched: code blocks and inline code, URLs, file paths (Windows, UNC,
+POSIX, `~/`, `./`) and Hermes `MEDIA:` lines, ACRONYMS, proper
 nouns, common tool names (`git`, `npm`, `docker`…), and anything you typed
 yourself in that message.
 
@@ -122,6 +123,13 @@ never lost.
   fixed reply.
 * **Oh My Pi:** the streaming display needs the `extensionRenderers.assistantText`
   setting (`omp config set extensionRenderers.assistantText true`).
+* **Hermes progress notes** (text between tool calls) appear while they are
+  written, so a note in the wrong language is corrected only afterwards: the
+  next tool result tells the model, and later requests show it the rewritten
+  note. With `"hold_stream": true` on a Hermes that has the
+  `transform_interim_message` hook, each note is cleaned before it is shown and
+  one that stays in another language is not shown; replies then arrive whole
+  instead of streaming.
 * **OpenClaw with a Claude CLI login** (`claude-cli` runtime): OpenClaw runs the
   turn inside Claude Code and fires no finalize or transcript hook, so only the
   guard and outgoing replies are handled; the stored history keeps the raw
@@ -212,7 +220,7 @@ Optional JSON file; every key is optional.
 |---|---|---|
 | `default_language` | `en` | Language used when a message is too short to detect and there is no earlier turn |
 | `rewrite` | `true` | Hermes: rewrite unfixable lines with the model (off = local rules and `⚠` only) |
-| `hold_stream` | `false` | Hermes: do not stream; show only the cleaned answer. If the cleaner fails, Hermes shows a fixed notice instead of the answer |
+| `hold_stream` | `false` | Hermes: do not stream; show only the cleaned answer. If the cleaner fails, Hermes shows a fixed notice instead of the answer. On a Hermes with `transform_interim_message`, progress notes are cleaned before they are shown (a note that stays in another language is hidden); without it they are hidden |
 | `timeout` | `15` | Hard deadline in seconds for the rewrite call (5–20). Hermes cancels a hook after 30 s and then skips it for 60 s, so the plugin stops waiting first, keeps the local fixes, and pauses model rewrites for 10 minutes after a failure or timeout |
 | `max_lines` | `20` | Hermes: most lines sent in one rewrite call |
 | `stop_action` | `rewrite` | Claude Code / Codex: `rewrite` asks for a short correction, `off` only injects the guard |

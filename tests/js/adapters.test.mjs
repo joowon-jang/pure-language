@@ -192,3 +192,21 @@ test("host-notice patterns stay linear", () => {
   E.stripHostNotes("\n".repeat(20000) + "--- Attached Context ---");
   assert.ok(performance.now() - start < 100);
 });
+
+test("paths, URLs and MEDIA: lines stay intact", () => {
+  const text = "수정본입니다.\n\nMEDIA:C:\\Users\\me\\Downloads\\【KOREC専用】履歴書_JANG_JOOWON_v2.xlsx\n" +
+    "- 원본 C:\\Users\\x\\【KOREC専用】履歴書.xlsx 와 ~/.hermes/専用/a.txt 는 그대로입니다.";
+  const r = E.cleanLocal(text, { target: "ko", allowed: ["ko"] }, true);
+  assert.equal(r.text, text);
+  assert.deepEqual(r.hits, []);
+  const spans = (l) => E.pathSpans(l).map(([a, b]) => l.slice(a, b));
+  assert.deepEqual(spans("(C:\\Users\\x\\a.txt) 확인"), ["C:\\Users\\x\\a.txt"]);
+  assert.deepEqual(spans("주소는 https://example.com/a(b) 입니다."), ["https://example.com/a(b)"]);
+  assert.deepEqual(spans("예/아니오, and/or, 1/2/3"), []);
+  for (const line of ["/" + "a".repeat(20000), "/a".repeat(10000) + " x", "C:\\" + "a\\".repeat(10000),
+    "~/" + "a/".repeat(10000), "MEDIA:" + "x".repeat(20000)]) {
+    const start = performance.now();
+    E.pathSpans(line);
+    assert.ok(performance.now() - start < 100, line.slice(0, 20));
+  }
+});

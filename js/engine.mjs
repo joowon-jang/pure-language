@@ -653,21 +653,61 @@ function verbatimSpans(line, target, context) {
   return spans;
 }
 
+// File paths, URLs and Hermes `MEDIA:` lines name real files: one changed character
+// (専用 -> 전용, 【 -> [) points the link at a file that does not exist.
+const PATH_RE = new RegExp(
+  "(?<![A-Za-z0-9_])MEDIA:[^\\n]*" +
+  "|(?<![A-Za-z0-9_])(?:https?|file)://[^\\s<>`\"']+" +
+  "|(?<![A-Za-z0-9_])[A-Za-z]:[\\\\/][^\\s<>`\"'|*?]*" +
+  "|(?<![A-Za-z0-9_\\\\/])(?:\\\\\\\\|~[\\\\/]|\\.\\.?[\\\\/])[^\\s<>`\"'|*?]*" +
+  "|(?<![A-Za-z0-9_\\uAC00-\\uD7A3/\\\\:.])/(?:[^\\s/<>`\"']+/)+[^\\s<>`\"']*",
+  "g");
+const PATH_TAIL = ".,;:!?";
+
+const countIn = (s, ch) => s.split(ch).length - 1;
+
+export function pathSpans(line) {
+  const out = [];
+  for (const m of line.matchAll(PATH_RE)) {
+    const a = m.index;
+    let b = a + m[0].length;
+    if (!line.startsWith("MEDIA:", a)) {
+      while (b > a && (PATH_TAIL.includes(line[b - 1]) ||
+             (line[b - 1] === ")" && countIn(line.slice(a, b), "(") < countIn(line.slice(a, b), ")")))) b--;
+    }
+    if (b - a >= 3) out.push([a, b]);
+  }
+  return out;
+}
+
+function mergeSpans(spans) {
+  const out = [];
+  for (const [a, b] of [...spans].sort((x, y) => x[0] - y[0] || x[1] - y[1])) {
+    if (out.length && a < out[out.length - 1][1]) out[out.length - 1][1] = Math.max(out[out.length - 1][1], b);
+    else out.push([a, b]);
+  }
+  return out;
+}
+
 function cleanLine(line, exempt, userCjk, final, kw) {
-  const spans = verbatimSpans(line, kw.target, kw.context);
+  const paths = pathSpans(line);
+  const spans = mergeSpans([...verbatimSpans(line, kw.target, kw.context), ...paths]);
   if (!spans.length) return cleanLineRaw(line, exempt, userCjk, final, kw);
   const keep = [];
   const maskedParts = [];
   let pos = 0;
   spans.forEach(([a, b], k) => {
-    maskedParts.push(line.slice(pos, a), String.fromCharCode(0xe000 + k));
-    keep.push(line.slice(a, b));
+    // a path keeps its length, so "is there Hangul within 40 characters" reads the line as before
+    const isPath = paths.some(([p]) => a <= p && p < b);
+    const ph = String.fromCharCode(0xe000 + k).repeat(isPath ? cpLen(line.slice(a, b)) : 1);
+    maskedParts.push(line.slice(pos, a), ph);
+    keep.push([ph, line.slice(a, b)]);
     pos = b;
   });
   maskedParts.push(line.slice(pos));
   const res = cleanLineRaw(maskedParts.join(""), exempt, userCjk, final, kw);
-  keep.forEach((piece, k) => {
-    res.text = res.text.split(String.fromCharCode(0xe000 + k)).join(piece);
+  keep.forEach(([ph, piece]) => {
+    res.text = res.text.split(ph).join(piece);
   });
   return res;
 }
@@ -751,6 +791,7 @@ function structureOk(orig, neu) {
   if (strip(PREFIX_RE.exec(orig)[0]) !== strip(PREFIX_RE.exec(neu)[0])) return false;
   if (orig.split("|").length !== neu.split("|").length) return false;
   if (findAll(INLINE_KEEP, orig).some((m) => !neu.includes(m[0]))) return false;
+  if (pathSpans(orig).some(([a, b]) => !neu.includes(orig.slice(a, b)))) return false;
   return cpLen(neu) <= Math.max(40, cpLen(orig) * 3);
 }
 

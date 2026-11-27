@@ -36,6 +36,11 @@ TEXTS = [
     "これは重要な会議です。그리고 资料は来週送ります。",
     "这个问题很重要，我们需要 확인 一下。",
     "Это важный вопрос, но the answer зависит от условий.",
+    "수정본입니다.\n\nMEDIA:C:\\Users\\me\\Downloads\\【KOREC専用】履歴書_JANG_JOOWON_v2.xlsx\n"
+    "- 파일은 C:\\Users\\x\\【KOREC専用】履歴書.pdf 그리고 ~/.hermes/専用/a.txt, /srv/専用/b.log 입니다.",
+    "주소는 https://example.com/専用/a(b) 이고 (D:\\data\\履歴書.xlsx) 확인, 예/아니오와 and/or 표현.",
+    "공유 폴더 \\\\srv\\share\\専用.pdf 와 ..\\docs\\専用.md 는 그대로, 専用 단어는 고칩니다.",
+    "> 드라이버 파일 삭제 실패(재부팅 후 다시): Access to the path 'C:\\Windows\\System32\\AMDRyzenMasterDriver.sys' is denied.",
 ]
 MSGS = [
     ["한국어로 하라고", "continue", "ok", "go on", "yes please", "answer in English", "thanks", "다시 한국어로 대답해"],

@@ -36,6 +36,54 @@ def c(text, target="ko", allowed=None):
     return E.clean(text, rewrite=False, target=target, allowed=frozenset(allowed or {target}), mark=True)[0]
 
 
+class PathsStayIntact(unittest.TestCase):
+    """File paths, URLs and MEDIA: lines name real files; the cleaner must not touch them."""
+
+    def test_media_line_and_paths_unchanged(self):
+        text = ("수정본입니다.\n\nMEDIA:C:\\Users\\me\\Downloads\\【KOREC専用】履歴書_JANG_JOOWON_v2.xlsx\n"
+                "- 원본 C:\\Users\\x\\【KOREC専用】履歴書.xlsx 와 ~/.hermes/専用/a.txt 는 그대로입니다.")
+        out, hits = E.clean(text, rewrite=False, target="ko", allowed=frozenset({"ko"}))
+        self.assertEqual(out, text)
+        self.assertEqual(hits, [])
+
+    def test_leak_outside_the_path_is_still_fixed(self):
+        out = c("파일 C:\\x\\専用.txt 는 専用 폴더에 있습니다.")
+        self.assertIn("C:\\x\\専用.txt", out)
+        self.assertNotIn(" 専用 폴더", out)
+
+    def test_masked_path_keeps_the_line_length(self):
+        # a long path used to keep the Korean words more than 40 characters away; masking it as one
+        # character pulled them close and an English error message read as a leak
+        line = ("> 드라이버 파일 삭제 실패(재부팅 후 다시): Access to the path "
+                "'C:\\Windows\\System32\\AMDRyzenMasterDriver.sys' is denied.")
+        words = [h[1] for h in E.clean(line, rewrite=False, target="ko", allowed=frozenset({"ko"}))[1]]
+        self.assertNotIn("is denied", words)      # beyond the path: more than 40 characters from Hangul
+        self.assertNotIn("is", words)
+
+    def test_spans(self):
+        cases = {
+            "자세한 건 /usr/local/bin/hermes 참고.": ["/usr/local/bin/hermes"],
+            "주소는 https://example.com/a(b) 입니다.": ["https://example.com/a(b)"],
+            "(C:\\Users\\x\\a.txt) 확인": ["C:\\Users\\x\\a.txt"],
+            "\\\\srv\\share\\a.pdf 와 ..\\x\\y": ["\\\\srv\\share\\a.pdf", "..\\x\\y"],
+            "예/아니오, and/or, 1/2/3": [],
+        }
+        for line, want in cases.items():
+            self.assertEqual([line[a:b] for a, b in E.path_spans(line)], want, line)
+
+    def test_rewrite_must_keep_paths(self):
+        orig = "파일 C:\\x\\専用.txt 를 check 하세요"
+        self.assertFalse(E._structure_ok(orig, "파일 C:\\x\\전용.txt 를 확인하세요"))
+        self.assertTrue(E._structure_ok(orig, "파일 C:\\x\\専用.txt 를 확인하세요"))
+
+    def test_path_pattern_linear(self):
+        for line in ("/" + "a" * 20000, "/a" * 10000 + " x", "C:\\" + "a\\" * 10000, "~/" + "a/" * 10000,
+                     "MEDIA:" + "x" * 20000):
+            start = time.perf_counter()
+            E.path_spans(line)
+            self.assertLess(time.perf_counter() - start, 0.1, line[:20])
+
+
 class HostNoteSpeed(unittest.TestCase):
     """The host-notice patterns run on every user message: they must stay linear."""
 
@@ -237,6 +285,49 @@ class Hermes(unittest.TestCase):
             self.assertIsNone(H._on_llm_request(request=korean, session_id="m", turn_id="M1"))
         finally:
             H._rewriter = saved
+
+    def test_held_note_shown_in_answer_language(self):
+        """transform_interim_message (held turns): a wrong-language note is rewritten before it is
+        shown; a Korean note passes unchanged; one that stays foreign is dropped."""
+        saved = H._rewriter
+        try:
+            H._on_pre_llm(session_id="hn", user_message="이 파일 읽어 줘", turn_id="HN1")
+            H._rewriter = lambda lines, *a: ["파일 내용을 읽어 보겠습니다."] * len(lines)
+            self.assertEqual(H._on_interim_transform(text="Let me read the file contents now.",
+                                                     session_id="hn", turn_id="HN1"),
+                             "파일 내용을 읽어 보겠습니다.")
+            self.assertIsNone(H._on_interim_transform(text="오류가 나서 메시지를 확인하겠습니다.",
+                                                      session_id="hn", turn_id="HN1"))
+            H._rewriter = lambda lines, *a: None             # the model call failed
+            self.assertEqual(H._on_interim_transform(text="An error occurred; let me check the message.",
+                                                     session_id="hn", turn_id="HN1"), "")
+            path = "MEDIA:C:\\x\\【KOREC専用】履歴書.xlsx 파일을 만들었습니다."
+            self.assertIsNone(H._on_interim_transform(text=path, session_id="hn", turn_id="HN1"))
+        finally:
+            H._rewriter = saved
+
+    def test_register_held_interim_hook(self):
+        seen = []
+
+        class Ctx:
+            llm = None
+
+            def register_auxiliary_task(self, key, **kw):
+                pass
+
+            def register_hook(self, name, cb, **kw):
+                seen.append((name, kw.get("hold_stream", False)))
+
+            def register_middleware(self, kind, cb):
+                pass
+
+        H._CFG["hold_stream"] = True
+        try:
+            H.register(Ctx())
+        finally:
+            H._CFG._override.pop("hold_stream", None)
+        self.assertIn(("transform_llm_output", True), seen)
+        self.assertIn(("transform_interim_message", False), seen)
 
     def test_tool_result_reminder(self):
         H._on_pre_llm(session_id="s", user_message="작업 관리자에서 이 프로세스가 뭔지 알아봐 줘", turn_id="R1")

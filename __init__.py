@@ -222,6 +222,39 @@ def _on_interim(text="", session_id="", turn_id="", **kwargs):
     return None
 
 
+_INTERIM_HOOK = "transform_interim_message"
+
+
+def _on_interim_transform(text="", session_id="", turn_id="", **kwargs):
+    """Held turns only (``hold_stream``): Hermes shows a progress note after this returns. A note in
+    the wrong language is cleaned like a final answer (model rewrite, then local rules); one still
+    in another language afterwards is dropped ("") rather than shown."""
+    st = _peek_state(session_id, turn_id or None)
+    if not st or st["skip"] or not isinstance(text, str) or not text.strip():
+        return None
+    target, allowed = st["target"], st["allowed"] or frozenset({st["target"]})
+    tools = _TOOLS.get(("turn", turn_id) if turn_id else ("session", session_id or "default"), "")
+    try:
+        fixed, hits = E.clean(text, st["user"], st["user_cjk"], target=target, allowed=allowed,
+                              user_text=st["text"], rewriter=_rewriter if _CFG["rewrite"] else None,
+                              max_lines=_CFG["max_lines"], context=tools,
+                              local_first=_CFG.get("local_fix") == "first", mark=False)
+        if E.note_off_language(fixed, target, allowed):
+            whole = _rewriter([fixed.replace("\n", " ")], target, allowed, st["text"]) if _CFG["rewrite"] else None
+            fixed = whole[0].strip() if whole and isinstance(whole[0], str) else fixed
+    except Exception:
+        log.warning("pure-language: progress-note cleaner failed", exc_info=True)
+        return ""
+    if E.note_off_language(fixed, target, allowed):
+        E.write_log(_log_path(), session_id, [("[%s] note-dropped" % target, "", text[:60])])
+        return ""
+    if fixed == text:
+        return None
+    E.write_log(_log_path(), session_id, [("[%s] note-%s" % (target, h[0]),) + tuple(h[1:]) for h in hits]
+                or [("[%s] note-rewritten" % target, text[:60], fixed[:60])])
+    return fixed
+
+
 def _on_tool_result(tool_name="", result=None, session_id="", turn_id=None, **kwargs):
     """Remind the model of the answer language right after each tool result.
 
@@ -370,5 +403,8 @@ def register(ctx):
             ctx.register_middleware("llm_request", _on_llm_request)
     if _CFG["hold_stream"]:
         ctx.register_hook("transform_llm_output", _on_transform, hold_stream=True)
+        # Held turns show progress notes only through this hook. A Hermes without it logs one
+        # "unknown hook" warning and keeps dropping held notes.
+        ctx.register_hook(_INTERIM_HOOK, _on_interim_transform)
     else:
         ctx.register_hook("transform_llm_output", _on_transform)

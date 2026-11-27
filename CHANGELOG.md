@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.6
+
+File paths, URLs and Hermes `MEDIA:` lines are no longer changed. A Windows path such as `C:\Users\x\【KOREC専用】履歴書.xlsx` outside backticks had its Japanese characters and brackets rewritten (`[KOREC전용]이력서`), so the file link pointed at a file that does not exist. Paths (Windows drive, UNC, POSIX, `~/`, `./`), URLs and the rest of a `MEDIA:` line are masked before cleaning, keeping their length so the "Hangul within 40 characters" test reads the line as before, and a model rewrite that alters a path is rejected. Both engines; on 1,240 past answers nothing else changed.
+Hermes: with `"hold_stream": true`, progress notes are cleaned before they are shown when Hermes has the `transform_interim_message` hook (a held turn used to drop them). A note in another language is rewritten by the model; one that stays foreign is not shown. On older Hermes the hook is not registered and held turns keep dropping notes.
+
 ## 0.2.5
 
 Attached files no longer decide the answer language. Hermes appends an English `--- Attached Context ---` block (and `--- Context Warnings ---`) below the typed text for every `@file:` reference; the language was read from the last lines, so a Korean request with an attachment got an English rule. Everything from that marker to the end is now dropped before the language is decided, in both engines.

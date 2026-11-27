@@ -850,18 +850,57 @@ def _verbatim_spans(line, target, context):
     return spans
 
 
+# File paths, URLs and Hermes ``MEDIA:`` lines name real files: one changed character
+# (専用 -> 전용, 【 -> [) points the link at a file that does not exist.
+_PATH_RE = re.compile(
+    r"(?<![A-Za-z0-9_])MEDIA:[^\n]*"
+    r"|(?<![A-Za-z0-9_])(?:https?|file)://[^\s<>`\"']+"
+    r"|(?<![A-Za-z0-9_])[A-Za-z]:[\\/][^\s<>`\"'|*?]*"
+    r"|(?<![A-Za-z0-9_\\/])(?:\\\\|~[\\/]|\.\.?[\\/])[^\s<>`\"'|*?]*"
+    r"|(?<![A-Za-z0-9_\uAC00-\uD7A3/\\:.])/(?:[^\s/<>`\"']+/)+[^\s<>`\"']*")
+_PATH_TAIL = ".,;:!?"
+
+
+def path_spans(line):
+    """(start, end) of file paths, URLs and ``MEDIA:`` directives in ``line``; sentence
+    punctuation and an unmatched closing parenthesis after a path are not part of it."""
+    out = []
+    for m in _PATH_RE.finditer(line):
+        a, b = m.start(), m.end()
+        if not line.startswith("MEDIA:", a):
+            while b > a and (line[b - 1] in _PATH_TAIL or
+                             (line[b - 1] == ")" and line.count("(", a, b) < line.count(")", a, b))):
+                b -= 1
+        if b - a >= 3:
+            out.append((a, b))
+    return out
+
+
+def _merge_spans(spans):
+    out = []
+    for a, b in sorted(spans):
+        if out and a < out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], b))
+        else:
+            out.append((a, b))
+    return out
+
+
 def _clean_line(line, exempt, user_cjk, final=False, target="ko", allowed=frozenset(), user_text="",
                 context=""):
-    spans = _verbatim_spans(line, target, context)
+    paths = path_spans(line)
+    spans = _merge_spans(_verbatim_spans(line, target, context) + paths)
     if not spans:
         return _clean_line_raw(line, exempt, user_cjk, final, target, allowed, user_text)
     keep, masked, pos = [], [], 0
     for k, (a, b) in enumerate(spans):
-        masked.append(line[pos:a]); masked.append(chr(0xE000 + k)); keep.append(line[a:b]); pos = b
+        # a path keeps its length, so "is there Hangul within 40 characters" reads the line as before
+        ph = chr(0xE000 + k) * ((b - a) if any(a <= p < b for p, _ in paths) else 1)
+        masked.append(line[pos:a]); masked.append(ph); keep.append((ph, line[a:b])); pos = b
     masked.append(line[pos:])
     res = _clean_line_raw("".join(masked), exempt, user_cjk, final, target, allowed, user_text)
-    for k, piece in enumerate(keep):
-        res.text = res.text.replace(chr(0xE000 + k), piece)
+    for ph, piece in keep:
+        res.text = res.text.replace(ph, piece)
     return res
 
 
@@ -971,6 +1010,8 @@ def _structure_ok(orig, new):
     if orig.count("|") != new.count("|"):
         return False
     if any(tok not in new for tok in _INLINE_KEEP.findall(orig)):
+        return False
+    if any(orig[a:b] not in new for a, b in path_spans(orig)):
         return False
     return len(new) <= max(40, len(orig) * 3)
 
