@@ -444,10 +444,14 @@ def _guard_prefixes():
 
 
 # notices the host appends to the user's message ("[System: The skills ... changed ...]")
-_HOST_NOTE_RE = re.compile(r"^[ \t]*\[(?:System|SYSTEM|IMPORTANT|Note|NOTE|Context|CONTEXT)\b.*?\][ \t]*$", re.S | re.M)
+# A notice may span lines (the skill list), so it may run up to 40 lines; each line is
+# scanned with [^\n] only, which keeps the match linear (no backtracking across lines).
+_HOST_NOTE_RE = re.compile(r"^[ \t]*\[(?:System|SYSTEM|IMPORTANT|Note|NOTE|Context|CONTEXT)\b"
+                           r"(?:[^\n]*\n){0,40}?[^\n]*\][ \t]*$", re.M)
 _HOST_TURN_RE = re.compile(r"\s*\[(?:System|SYSTEM|IMPORTANT)\s*:")
 # one-line wrapper tags ("[OUT-OF-BAND USER MESSAGE — ...]", "[/OUT-OF-BAND USER MESSAGE]")
-_HOST_TAG_RE = re.compile(r"^[ \t]*\[/?[A-Z][A-Z0-9_-]+(?:[ _-][A-Z0-9_-]+)+\b[^\]\n]*\][ \t]*$", re.M)
+# Words and separators never overlap and the tail is capped, so matching stays linear.
+_HOST_TAG_RE = re.compile(r"^[ \t]*\[/?[A-Z][A-Z0-9]*(?:[ _-][A-Z0-9]+)+\b[^\]\n]{0,200}\][ \t]*$", re.M)
 
 
 def strip_host_notes(msg):

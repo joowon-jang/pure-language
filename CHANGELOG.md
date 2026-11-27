@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4
+
+Host-notice patterns run on every user message and are now linear: the wrapper-tag pattern no longer lets its word and separator parts overlap (a 200-character `[A-A-A…` line took exponential time before) and its tail is capped at 200 characters; a multi-line notice is matched line by line for at most 40 lines instead of `.*?` over the rest of the message. Timing tests cover both engines.
+Hermes: settings are read from the active profile's home when a hook runs (`hermes_constants.get_hermes_home()`), so one gateway serving several profiles uses each profile's `pure-language.json`.
+
 ## 0.2.3
 
 Unfixed leaks are left as written by default; `"mark": true` restores the ⚠ marks, now placed after the original text instead of replacing it.

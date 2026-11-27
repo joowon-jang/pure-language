@@ -167,3 +167,21 @@ test("openclaw: rewrite failure leaves no warning marks", async () => {
   const sent = await h.message_sending[0]({ to: "u", content: "보통 中小企業은 one week 걸립니다." }, c);
   assert.equal(sent.content, "보통 중소기업은 one week 걸립니다.");
 });
+
+test("host-notice patterns stay linear", () => {
+  const line = "[A" + "-A".repeat(99);
+  for (const text of [line, line + "] x", line + "]", "안녕\n" + line]) {
+    const start = performance.now();
+    E.stripHostNotes(text);
+    assert.ok(performance.now() - start < 100, text.slice(0, 30));
+  }
+  let start = performance.now();
+  E.stripHostNotes(Array(2000).fill("[Note 메모").join("\n") + "\n끝");
+  assert.ok(performance.now() - start < 500);
+  start = performance.now();
+  E.stripHostNotes("[Note " + "a".repeat(100000));
+  assert.ok(performance.now() - start < 100);
+  const msg = "한국어로 답해 줘\n\n[System: The skills available changed.\nNow available:\n    - korean-only-output: Use for all replies]";
+  assert.equal(E.stripHostNotes(msg), "한국어로 답해 줘");
+  assert.equal(E.stripHostNotes("[OUT-OF-BAND USER MESSAGE — a direct message]\n확실하게 수정해.\n[/OUT-OF-BAND USER MESSAGE]"), "확실하게 수정해.");
+});

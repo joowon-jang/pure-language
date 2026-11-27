@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -15,6 +16,7 @@ sys.path.insert(0, ROOT)
 os.environ["HERMES_HOME"] = tempfile.mkdtemp(prefix="pl-hermes-")   # isolated settings and logs
 
 from engine import core as E  # noqa: E402
+from engine import settings as S  # noqa: E402
 
 # load the Hermes adapter as a package, the way Hermes does
 _spec = importlib.util.spec_from_file_location("pure_language_hermes", os.path.join(ROOT, "__init__.py"),
@@ -32,6 +34,33 @@ def R(session, msg):
 
 def c(text, target="ko", allowed=None):
     return E.clean(text, rewrite=False, target=target, allowed=frozenset(allowed or {target}), mark=True)[0]
+
+
+class HostNoteSpeed(unittest.TestCase):
+    """The host-notice patterns run on every user message: they must stay linear."""
+
+    def _fast(self, text):
+        start = time.perf_counter()
+        E.strip_host_notes(text)
+        return time.perf_counter() - start
+
+    def test_tag_without_backtracking(self):
+        line = "[A" + "-A" * 99
+        self.assertEqual(len(line), 200)
+        for text in (line, line + "] x", line + "]", "안녕\n" + line):
+            self.assertLess(self._fast(text), 0.1, text[:30])
+
+    def test_note_bounded(self):
+        many = "\n".join(["[Note 메모"] * 2000) + "\n끝"
+        self.assertLess(self._fast(many), 0.5)
+        self.assertLess(self._fast("[Note " + "a" * 100000), 0.1)
+
+    def test_notices_still_removed(self):
+        msg = ("한국어로 답해 줘\n\n[System: The skills available changed.\nNow available:\n"
+               "    - korean-only-output: Use for all replies]")
+        self.assertEqual(E.strip_host_notes(msg), "한국어로 답해 줘")
+        msg = "[OUT-OF-BAND USER MESSAGE — a direct message]\n확실하게 수정해.\n[/OUT-OF-BAND USER MESSAGE]"
+        self.assertEqual(E.strip_host_notes(msg), "확실하게 수정해.")
 
 
 class Korean(unittest.TestCase):
@@ -586,6 +615,19 @@ class NotACommand(unittest.TestCase):
         H._on_transform(response_text="gufo는 정상입니다.", session_id="g", turn_id="G1")
         H._on_pre_llm(session_id="g", user_message="꺼줘.", turn_id="G2")
         self.assertIsNone(H._on_transform(response_text="gufo는 그대로 돌고 있습니다.", session_id="g", turn_id="G2"))
+
+    def test_settings_follow_active_profile(self):
+        a, b = tempfile.mkdtemp(prefix="pl-a-"), tempfile.mkdtemp(prefix="pl-b-")
+        with open(os.path.join(b, "pure-language.json"), "w", encoding="utf-8") as fh:
+            json.dump({"default_language": "ja"}, fh)
+        saved = H._hermes_home
+        try:
+            H._hermes_home = lambda: a
+            self.assertEqual(H._CFG["default_language"], S.DEFAULTS["default_language"])
+            H._hermes_home = lambda: b
+            self.assertEqual(H._CFG["default_language"], "ja")
+        finally:
+            H._hermes_home = saved
 
     def test_short_english_word_keeps_language(self):
         memo = {}

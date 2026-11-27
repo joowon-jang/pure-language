@@ -25,6 +25,15 @@ _TASK = "pure_language_rewrite"
 
 
 def _hermes_home():
+    """The active profile's home, resolved when a hook runs: one gateway process can
+    serve several profiles, so an import-time read would pin the launching one."""
+    try:
+        from hermes_constants import get_hermes_home
+        home = get_hermes_home()
+        if home:
+            return str(home)
+    except Exception:
+        pass
     home = os.environ.get("HERMES_HOME")
     if home:
         return home
@@ -33,7 +42,42 @@ def _hermes_home():
     return os.path.join(os.path.expanduser("~"), ".hermes")
 
 
-_CFG = S.load([os.path.join(_hermes_home(), "pure-language.json")])
+class _Settings:
+    """Settings of the active profile (``<home>/pure-language.json``), reloaded when the
+    home or the file changes. Values assigned here (tests) override the file."""
+
+    def __init__(self):
+        self._cache = {}       # path -> (mtime, cfg)
+        self._override = {}
+
+    def _current(self):
+        path = os.path.join(_hermes_home(), "pure-language.json")
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            mtime = None
+        hit = self._cache.get(path)
+        if hit is None or hit[0] != mtime:
+            if len(self._cache) > 32:
+                self._cache.clear()
+            hit = self._cache[path] = (mtime, S.load([path]))
+        return hit[1]
+
+    def __getitem__(self, key):
+        return self._override[key] if key in self._override else self._current()[key]
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __setitem__(self, key, value):
+        self._override[key] = value
+
+
+_CFG = _Settings()
+
 _CTX = None
 _TASK_OK = False
 _MEMO = {}       # sticky / last language per session

@@ -329,11 +329,13 @@ const GUARD_PREFIXES = [...new Set([
   ...Object.values(T.GUARDS), ...Object.values(T.GUARDS_SHORT), T.GUARD_GENERIC, T.GUARD_SHORT_GENERIC,
 ].filter((t) => t.slice(0, 40).includes("]")).map((t) => t.slice(0, t.indexOf("]") + 1)).concat(["[pure-language]"]))];
 // notices the host appends to the user's message ("[System: The skills ... changed ...]")
-const HOST_NOTE_RE = /^[ \t]*\[(?:System|SYSTEM|IMPORTANT|Note|NOTE|Context|CONTEXT)\b[\s\S]*?\][ \t]*$/gm;
+// up to 40 lines, each scanned with [^\n] only: linear, same as the Python engine
+const HOST_NOTE_RE = /^[ \t]*\[(?:System|SYSTEM|IMPORTANT|Note|NOTE|Context|CONTEXT)\b(?:[^\n]*\n){0,40}?[^\n]*\][ \t]*$/gm;
 // the whole message is the host's (background job finished, nudges)
 const HOST_TURN_RE = /^\s*\[(?:System|SYSTEM|IMPORTANT)\s*:/;
 // one-line wrapper tags ("[OUT-OF-BAND USER MESSAGE — ...]", "[/OUT-OF-BAND USER MESSAGE]")
-const HOST_TAG_RE = /^[ \t]*\[\/?[A-Z][A-Z0-9_-]+(?:[ _-][A-Z0-9_-]+)+\b[^\]\n]*\][ \t]*$/gm;
+// words and separators never overlap and the tail is capped: linear
+const HOST_TAG_RE = /^[ \t]*\[\/?[A-Z][A-Z0-9]*(?:[ _-][A-Z0-9]+)+\b[^\]\n]{0,200}\][ \t]*$/gm;
 
 /** The user's own words: drop host notices and this plugin's rule lines. */
 export function stripHostNotes(msg) {
